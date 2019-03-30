@@ -17,6 +17,10 @@ from tkinter import (filedialog, Tk, IntVar, Checkbutton, Label, Entry,
 #Option for dilution and titles?
 #Bring back the automated peak detection?
 #Make the GUI as close as possible to the actual PTRMS viewer?
+#Add option for spectroscopy
+#Make changes to readme
+#Make sure the GUI can plot one after graph after another
+
 
 #Changes the font and fontsize of the graphs 
 if __name__ == "__main__":
@@ -234,7 +238,7 @@ def select_param():
            command=massscangetvals).grid(row=9, sticky="ew")
     Button(window_1, text="Exit", command=close).grid(row=10, sticky="ew")
     
-    mainloop()
+    window_1.mainloop()
 
 def file_retrieval():
 #Returns list of filenames in order.
