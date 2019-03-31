@@ -4,12 +4,17 @@ from tkinter import (filedialog, Tk, Button, Label, StringVar, OptionMenu,
     Entry, IntVar, Checkbutton)
 import pandas as pd
 import numpy as np
+import sys, itertools, os
+from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 def close():
-        window.quit()
-        window.destroy()
+    window.quit()
+    window.destroy()
 
 def getdatapaths():
+    global paths
     paths = list(filedialog.askopenfilenames(parent=window,
         title='Choose data files', 
         initialdir="/home/jgb509/Documents/CRM/Data"))
@@ -32,25 +37,145 @@ def loaddata():
                 entry = IntVar()
                 tickbox = Checkbutton(window, text=channels[m][n],
                             variable=entry)
-                tickbox.grid(row=5+n, column=m) #m+(len(channel_keys[0])/14 + 1)
+                tickbox.grid(row=5+n, column=m-1) #m+(len(channel_keys[0])/14 + 1)
                 params[8][m].append(entry)
                 tickboxes.append(tickbox)
     
-    mz_channels = [n.split() for n in channels[0]]
-    available_mz = ("m/z " + str(mz_channels[0][1]) + " to " 
-            + str(mz_channels[-1][1]) + " are available")
-    usr_inst = ("Input individual comma separated values\n"
-            "or a range, hypen separated.")
-    Label(window, text=available_mz).grid(row=5, column=1)
-    Label(window, text=usr_inst).grid(row=7, column=1)
-    params[8][0] = Entry(window)   
-    params[8][0].insert("0", str(mz_channels[0][1]) + "-" 
-            + str(mz_channels[-1][1]))
-    params[8][0].grid(row=6, column=1)
-    
+    if params[2].get() == "Time series":
+        for n in range(len(channels[0])):
+            x = n//14 + 2
+            y = n + 5 - (n//14 * 14)           
+            entry = IntVar()
+            tickbox = Checkbutton(window, text=channels[0][n], 
+                        variable=entry)
+            tickbox.grid(row=y, column=x, sticky="W")
+            params[8][0].append(entry)
+            tickboxes.append(tickbox)
 
+    elif params[2].get() == "Mass scan":
+        mz_channels = [n.split() for n in channels[0]]
+        available_mz = ("m/z " + str(mz_channels[0][1]) + " to " 
+            + str(mz_channels[-1][1]) + " are available")
+        usr_inst = ("Input individual comma separated values\n"
+            "or a range, hypen separated.")
+        Label(window, text=available_mz).grid(row=5, column=2)
+        Label(window, text=usr_inst).grid(row=7, column=2)
+        params[8][0] = Entry(window)   
+        params[8][0].insert("0", str(mz_channels[0][1]) + "-" 
+            + str(mz_channels[-1][1]))
+        params[8][0].grid(row=6, column=2)
+    
 def plot():
-    print("hi")
+    if params[2].get() == "Time series":
+        plot_time_series()
+    elif params[2].get() == "Mass scan":
+        plot_mass_scan()
+
+def plot_time_series():
+    print("plotting time series")
+
+    _, ax1 = plt.subplots()
+    if params[1].get() == "Absolute Time":
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))                    
+                
+    markercolours = itertools.cycle(['k','lightgreen','r','magenta',
+                                     'midnightblue','darkorange'])
+    linecolours = itertools.cycle(['grey','g','maroon','orchid', 'skyblue',
+                                   'orange'])
+    linestyles = itertools.cycle(['-', '--', ':', '-.'])
+    
+    print(params[1].get())
+    
+    all_channels = get_channels()
+
+    ydata, ylabel, chosenchannels = get_ydata(params[1].get(), params[8][0], 
+        all_channels[0])
+    absolute_time = get_xdata("Absolute Time", params[3].get())[0]
+    date = datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d')
+    
+    reloffset = date + ' ' + params[3].get()
+    
+    xdata, xlabel = get_xdata(params[1], reloffset)   
+    rel_time = get_xdata("Relative Time", 
+        datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d %H:%M:%S'))[0]
+    
+    
+    cycles_perxmins = int(np.argmin([abs(element*60 - params[6].get())
+                          for element in rel_time]))                          
+    print("There are " + str(cycles_perxmins) + " cycles per " 
+          + str(params[6].get()) + " seconds.")
+
+    for index in range(len(ydata)):
+        mc = next(markercolours)
+        lc = next(linecolours)
+        ls = next(linestyles)
+        series_label = (chosenchannels[index] + ', ' + str(params[6].get())
+        + ' second moving average')
+        ysmooth = smooth(ydata[index], cycles_perxmins)
+        ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc)
+        ax1.plot(xdata, ysmooth, lw=2, color=lc, label=series_label,
+                 linestyle=ls)
+    
+    plt.show()
+
+def plot_mass_scan():
+    print("plotting mass scan")
+                
+    yoption = params[0].get()
+    all_channels = get_channels()
+    channels = np.zeros(len(all_channels[0]), dtype=int)
+    n_channels = convertparam(params[8][0].get())      
+    n_channels = ["m/z " + str(i) for i in n_channels]
+    for n in n_channels:
+        channels[all_channels[0].index(n)] = 1
+               
+    y, ylabel, chosenchannels = get_ydata(yoption, channels, all_channels[0])
+    print(ylabel, chosenchannels)
+        
+    files = paths
+    lengths = []
+    for f in files:
+        data = np.asarray(pd.read_excel(f, sheet_name="Time   Cycle")
+            ["Cycle number"])
+        lengths.append(len(data))
+ 
+    means = [[] for _ in range(len(files))]
+    stddev = [[] for _ in range(len(files))]
+
+    for m in range(len(chosenchannels)):
+        count1 = 0
+        for i in range(len(files)):
+            count2 = count1 + lengths[i] 
+            means[i].append(np.mean(y[m][count1:count2]))
+            #Need to also calculate the standard error of the mean
+            stddev[i].append(np.std(y[m][count1:count2]))
+            count1 = count2
+                
+    ind = np.arange(len(chosenchannels))
+    width = 2
+        
+    _, ax = plt.subplots()
+        
+    fccolours = itertools.cycle(['red', 'gray','green', 'blue', 'cyan',
+        'magenta','lawngreen','darkorange','maroon','orchid'])
+        
+    for i in range(len(files)):
+        files[i] = os.path.basename(files[i])[:-5]
+        
+    for i in range(len(files)):
+        fc = next(fccolours)
+        ax.bar(ind + ind*(len(files)*width) + width*i, means[i], width, 
+            color=fc, alpha=.5, align='edge',
+            error_kw=dict(ecolor='k', lw=1.5, capsize=3, capthick=1.5), 
+            yerr=stddev[i], label=files[i])
+        
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel("Mass/charge ratio")
+    ax.set_xticks(ind + ind*(len(files)*width) + width*(len(files)/2))
+    xlabels = [n[4:-2] for n in chosenchannels]
+    ax.set_xticklabels(xlabels)
+    ax.legend()
+    plt.show()
 
 def select_param():
     
@@ -86,14 +211,12 @@ def select_param():
         params[i] = StringVar(window)
         params[i].set(defaultoption[i])
         OptionMenu(window, params[i], *options[i]).grid(row=i, column=3)
-    
-    print(params)
 
 def get_channels():
 #Accepts a list of filenames and returns the full list of channel names (keys) 
 #from the first excel file that's read in
 
-    files = params[5]
+    files = paths
     all_channels = []
     sheetnames = ["Raw signal intensities", "Instrument",
                   "Reaction conditions"]                 
@@ -125,34 +248,31 @@ def convertparam(param):
        
     return param
 
-def get_ydata(yoption, channels, channel_keys, sheetname):
+def get_ydata(yoption, channels, channel_keys):
 #Args are corresponding to raw counts or concentration and the list of channel 
 #keys. Returns a list of lists of ydata from the corresponding channels and 
 #yoption and the yaxis label. 
-
-    files = params[5]
-    
+ 
     chosenchannels = []
     for n in range(len(channels)):
         if channels[n] == 1:
             chosenchannels.append(channel_keys[n])
     
     y = [[] for _ in range(len(chosenchannels))]      
-    for f in files:
-        data = pd.read_excel(f, sheet_name=sheetname)
+    for f in paths:
+        data = pd.read_excel(f, sheet_name=yoption)
         for i in range(len(chosenchannels)):
             tmp = np.asarray(data[chosenchannels[i]])
             tmp = [0 if item == '#NV' else item for item in tmp]
             y[i].extend(tmp)
     
-    if sheetname == "Raw signal intensities" or sheetname == "Concentration":
-        if yoption == "Raw signal intensities":
+    if yoption == "Raw signal intensities":
             ylabel = "Raw signal intensity (cps)"
            
-        elif yoption == "Concentration":
-            ylabel = "Concentration (ppb)"
+    elif yoption == "Concentration":
+        ylabel = "Concentration (ppb)"
             
-    elif sheetname == "Instrument" or sheetname == "Reaction conditions" :
+    elif yoption == "Instrument" or yoption == "Reaction conditions" :
         ylabel = "ARB"
     
    # print(sheetname, yoption)    
@@ -168,7 +288,6 @@ def smooth(y, box_pts):
 def get_xdata(xoption, reloffset):
 #Returns xdata list and xlabel depending on xoption.
 
-    files = params[5]
     if reloffset != " " and xoption == "Relative Time":
         reloffset = datetime.datetime.strptime(reloffset.strip(),
                                                '%Y-%m-%d %H:%M:%S')
@@ -177,7 +296,7 @@ def get_xdata(xoption, reloffset):
         sys.exit("Need to choose a starting time for relative time")
         
     x = []
-    for f in files:
+    for f in paths:
         data = pd.read_excel(f, sheet_name="Time   Cycle")
         if xoption == "Cycle number":
             data = np.asarray(data[xoption])
