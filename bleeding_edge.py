@@ -101,7 +101,7 @@ def plot_time_series():
 
     if params[1].get() == "Absolute Time":
         print("setting xaxis format to dates")
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))                    
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))                    
                 
     markercolours = itertools.cycle(['k','lightgreen','r','magenta',
                                      'midnightblue','darkorange'])
@@ -291,13 +291,10 @@ def get_ydata(yoption, channels, channel_keys):
 #yoption and the yaxis label. 
 
     chosenchannels = []
-    
     for n in range(len(channels)):
         if channels[n] == 1:
             chosenchannels.append(channel_keys[n])
  
-    print(channels)
-    print(chosenchannels)
     y = [[] for _ in range(len(chosenchannels))]      
     for f in paths:
         data = pd.read_excel(f, sheet_name=yoption)
