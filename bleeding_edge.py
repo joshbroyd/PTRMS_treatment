@@ -110,8 +110,9 @@ def plot_time_series():
     linestyles = itertools.cycle(['-', '--', ':', '-.'])
         
     all_channels = get_channels()
+    channels = [i.get() for i in params[8][0]]
 
-    ydata, ylabel, chosenchannels = get_ydata(params[0].get(), params[8][0], 
+    ydata, ylabel, chosenchannels = get_ydata(params[0].get(), channels, 
         all_channels[0])
     absolute_time = get_xdata("Absolute Time", params[3].get())[0]
     date = datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d')
@@ -121,8 +122,7 @@ def plot_time_series():
     xdata, xlabel = get_xdata(params[1].get(), reloffset)   
     rel_time = get_xdata("Relative Time", 
         datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d %H:%M:%S'))[0]
-    
-    
+     
     cycles_perxmins = int(np.argmin([abs(element*60 - float(params[6].get()))
                           for element in rel_time]))                          
     print("There are " + str(cycles_perxmins) + " cycles per " 
@@ -291,10 +291,13 @@ def get_ydata(yoption, channels, channel_keys):
 #yoption and the yaxis label. 
 
     chosenchannels = []
+    
     for n in range(len(channels)):
         if channels[n] == 1:
             chosenchannels.append(channel_keys[n])
-    
+ 
+    print(channels)
+    print(chosenchannels)
     y = [[] for _ in range(len(chosenchannels))]      
     for f in paths:
         data = pd.read_excel(f, sheet_name=yoption)
