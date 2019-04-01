@@ -27,6 +27,43 @@ if __name__ == "__main__":
             'font.family':'serif'}
     mpl.rcParams.update(params)
 
+def select_param():
+    
+    global params
+    params = [[] for _ in range(9)]
+    commands = [getdatapaths, getreadmepath, loaddata, plot, close]
+    commandtext = ["Open files", "Readme file" , "Load data", "Plot", "Exit"] 
+    for i in range(len(commandtext)):
+        Button(window, text=commandtext[i], command=commands[i]).grid(row=i, sticky="NESW")
+
+    Label(window, text="Moving average\nduration (seconds)").grid(row=4,
+        column=2, sticky="NESW")
+    Label(window, text="Absolute time (hh:mm) \nwhen relative time = 0").grid(
+        row=3, column=2, sticky="NESW")
+
+    paramsindex = range(3,7)
+    rowindex = [3, 1, 0, 4]
+    columnindex = [3, 1, 1, 3]
+    for i in range(len(paramsindex)):
+        params[paramsindex[i]] = Entry(window)
+        params[paramsindex[i]].grid(column=columnindex[i], row=rowindex[i], sticky="NESW")
+
+    menutext = ["y-axis format", "x-axis format",""]
+    defaultoption = ["Concentration","Absolute Time","Time series"]
+    options = [["Concentration", "Raw signal intensities"], ["Cycle number", 
+                "Absolute Time", "Relative Time"],["Time series", "Mass scan"]]
+    for i in range(3):
+        Label(window, text=menutext[i]).grid(row=i, column=2, sticky="NESW")
+        params[i] = StringVar(window)
+        params[i].set(defaultoption[i])
+        OptionMenu(window, params[i], *options[i]).grid(row=i, column=3, sticky="NESW")
+            
+    params[6].insert("0", 120.0)
+    params[7] = IntVar()
+    Checkbutton(window, text="Calibration", 
+        variable=params[7]).grid(column=2,row=2, sticky="NESW")
+
+
 def close():
     window.quit()
     window.destroy()
@@ -82,7 +119,42 @@ def loaddata():
         params[8][0].insert("0", str(mz_channels[0][1]) + "-" 
             + str(mz_channels[-1][1]))
         params[8][0].grid(row=6, column=2)
+
+def get_channels():
+#Accepts a list of filenames and returns the full list of channel names (keys) 
+#from the first excel file that's read in
+
+    all_channels = []
+    sheetnames = ["Raw signal intensities", "Instrument",
+                  "Reaction conditions"]                 
+    for sheetname in sheetnames:
+        data = pd.read_excel(paths[0], sheet_name=sheetname)
+        channels = [str(x) for x in list(data.keys())]
+        all_channels.append(channels)
     
+    #Need to check the channels of the other files in turn as well.
+
+    return all_channels
+
+# Converts the user input to parameter list
+def convertparam(param):
+    
+    if '-' in param:
+        i = param.index('-')
+        MIN = float(param[:i])
+        MAX = float(param[i+1:])
+        STEP = 1.0
+        NUM = int((MAX-MIN) / STEP+1)
+        param = np.linspace(MIN, MAX, NUM)
+        
+    elif '-' not in param and ',' in param:
+        param = [float(n) for n in param.split(',')]
+    
+    elif '-' not in param and ',' not in param:
+        param = [float(param)]
+       
+    return param
+
 def plot():
     if params[2].get() == "Time series":
         plot_time_series()
@@ -97,7 +169,6 @@ def plot_time_series():
     global ax1
 
     _, ax1 = plt.subplots()
- #   print("params1=", params[1])
 
     if params[1].get() == "Absolute Time":
         print("setting xaxis format to dates")
@@ -214,77 +285,6 @@ def plot_mass_scan():
     ax.legend()
     plt.show()
 
-def select_param():
-    
-    global params
-    params = [[] for _ in range(9)]
-    commands = [getdatapaths, getreadmepath, loaddata, plot, close]
-    commandtext = ["Open files", "Readme file" , "Load data", "Plot", "Exit"] 
-    for i in range(len(commandtext)):
-        Button(window, text=commandtext[i], command=commands[i]).grid(row=i, sticky="NESW")
-
-    Label(window, text="Moving average\nduration (seconds)").grid(row=4,
-        column=2, sticky="NESW")
-    Label(window, text="Absolute time (hh:mm) \nwhen relative time = 0").grid(
-        row=3, column=2, sticky="NESW")
-
-    paramsindex = range(3,7)
-    rowindex = [3, 1, 0, 4]
-    columnindex = [3, 1, 1, 3]
-    for i in range(len(paramsindex)):
-        params[paramsindex[i]] = Entry(window)
-        params[paramsindex[i]].grid(column=columnindex[i], row=rowindex[i], sticky="NESW")
-
-    menutext = ["y-axis format", "x-axis format",""]
-    defaultoption = ["Concentration","Absolute Time","Time series"]
-    options = [["Concentration", "Raw signal intensities"], ["Cycle number", 
-                "Absolute Time", "Relative Time"],["Time series", "Mass scan"]]
-    for i in range(3):
-        Label(window, text=menutext[i]).grid(row=i, column=2, sticky="NESW")
-        params[i] = StringVar(window)
-        params[i].set(defaultoption[i])
-        OptionMenu(window, params[i], *options[i]).grid(row=i, column=3, sticky="NESW")
-            
-    params[6].insert("0", 120.0)
-    params[7] = IntVar()
-    Checkbutton(window, text="Calibration", 
-        variable=params[7]).grid(column=2,row=2, sticky="NESW")
-
-def get_channels():
-#Accepts a list of filenames and returns the full list of channel names (keys) 
-#from the first excel file that's read in
-
-    all_channels = []
-    sheetnames = ["Raw signal intensities", "Instrument",
-                  "Reaction conditions"]                 
-    for sheetname in sheetnames:
-        data = pd.read_excel(paths[0], sheet_name=sheetname)
-        channels = [str(x) for x in list(data.keys())]
-        all_channels.append(channels)
-    
-    #Need to check the channels of the other files in turn as well.
-
-    return all_channels
-
-# Converts the user input to parameter list
-def convertparam(param):
-    
-    if '-' in param:
-        i = param.index('-')
-        MIN = float(param[:i])
-        MAX = float(param[i+1:])
-        STEP = 1.0
-        NUM = int((MAX-MIN) / STEP+1)
-        param = np.linspace(MIN, MAX, NUM)
-        
-    elif '-' not in param and ',' in param:
-        param = [float(n) for n in param.split(',')]
-    
-    elif '-' not in param and ',' not in param:
-        param = [float(param)]
-       
-    return param
-
 def get_ydata(yoption, channels, channel_keys):
 #Args are corresponding to raw counts or concentration and the list of channel 
 #keys. Returns a list of lists of ydata from the corresponding channels and 
@@ -311,9 +311,7 @@ def get_ydata(yoption, channels, channel_keys):
             
     elif yoption == "Instrument" or yoption == "Reaction conditions" :
         ylabel = "ARB"
-    
-   # print(sheetname, yoption)    
-   # print(ylabel)     
+        
     return y, ylabel, chosenchannels
 
 def smooth(y, box_pts):
@@ -351,8 +349,7 @@ def get_xdata(xoption, reloffset):
         elif xoption == "Relative Time":          
             tmp = []
             for time in range(len(data["Absolute Time"])):
-                tmp.append(data["Absolute Time"][time].to_pydatetime())
-            
+                tmp.append(data["Absolute Time"][time].to_pydatetime())      
             tmp = [(item-reloffset).total_seconds()/60.0 for item in tmp]
             x.extend(tmp)
             xlabel = xoption + " (mins)"
@@ -436,8 +433,7 @@ def use_readme():
             
             _, ax2 = plt.subplots()
             dilution = []
-           # dilution = [1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
-            
+            # dilution = [1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
             #[0, 1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] for benzene
             #[0, 5e-3, 0.01, 0.015, 0.02, 0.025, 0.03] # correct for diethyl ether
             for x in range(len(cycles)):
