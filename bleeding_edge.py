@@ -11,6 +11,8 @@ import sys, itertools, os, datetime, bisect, string
 import pandas as pd
 from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
+from scipy.stats import linregress
+
 
 #Changes the font and fontsize of the graphs 
 if __name__ == "__main__":
@@ -34,7 +36,8 @@ def select_param():
     commands = [getdatapaths, getreadmepath, loaddata, plot, close]
     commandtext = ["Open files", "Readme file" , "Load data", "Plot", "Exit"] 
     for i in range(len(commandtext)):
-        Button(window, text=commandtext[i], command=commands[i]).grid(row=i, sticky="NESW")
+        Button(window, text=commandtext[i], command=commands[i]).grid(row=i, 
+        sticky="NESW")
 
     Label(window, text="Moving average\nduration (seconds)").grid(row=4,
         column=2, sticky="NESW")
@@ -46,7 +49,7 @@ def select_param():
     columnindex = [3, 1, 1, 3]
     for i in range(len(paramsindex)):
         params[paramsindex[i]] = Entry(window)
-        params[paramsindex[i]].grid(column=columnindex[i], row=rowindex[i], sticky="NESW")
+        params[paramsindex[i]].grid(column=columnindex[i], row=rowindex[i])
 
     menutext = ["y-axis format", "x-axis format",""]
     defaultoption = ["Concentration","Absolute Time","Time series"]
@@ -62,7 +65,6 @@ def select_param():
     params[7] = IntVar()
     Checkbutton(window, text="Calibration", 
         variable=params[7]).grid(column=2,row=2, sticky="NESW")
-
 
 def close():
     window.quit()
@@ -166,12 +168,13 @@ def plot():
 
 def plot_time_series():
     print("plotting time series")
-    global ax1
+    global ax1, ax2, chosenchannels
 
-    _, ax1 = plt.subplots()
+    fig1, ax1 = plt.subplots(figsize=(20,10))
+    fig2, ax2 = plt.subplots(figsize=(15,15))
 
     if params[1].get() == "Absolute Time":
-        print("setting xaxis format to dates")
+        print("setting xaxis format to absolute time")
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))                    
                 
     markercolours = itertools.cycle(['k','lightgreen','r','magenta',
@@ -203,29 +206,40 @@ def plot_time_series():
         mc = next(markercolours)
         lc = next(linecolours)
         ls = next(linestyles)
-        series_label = (chosenchannels[index] + ', ' + str(params[6].get())
+        series_label = (chosenchannels[index] + ',\n ' + str(params[6].get())
         + ' second moving average')
         ysmooth = smooth(ydata[index], cycles_perxmins)
         ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc)
         ax1.plot(xdata, ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
-    
+
+    title = date + ' experiment'
+    ax1.set(xlabel=xlabel, ylabel=ylabel, title = title)
     if params[4].get() != '':
         params.append(date)
         params.append(absolute_time)
         params.append(xdata)
         params.append(ydata)
         use_readme()
-
-    ax1.set_xlabel(xlabel)
-    ax1.set_ylabel(ylabel)
+    
     ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
     ax1.yaxis.set_minor_formatter(ScalarFormatter())
     ax1.yaxis.set_major_formatter(ScalarFormatter())
-    leg = ax1.legend() #ncol=2
-    leg.get_frame().set_alpha(1)
-    leg.get_frame().set_edgecolor('white')    
+    leg = ax1.legend().get_frame() #ncol=2
+    leg.set_alpha(0.8)
+    leg.set_edgecolor('white')
+    
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized()
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     plt.show()
+
+    fig1.savefig('myimage.svg', format='svg', dpi=1200)
+    fig1.savefig('myimage.eps', format='eps', dpi=1200)
+    fig2.savefig('myimage2.svg', format='svg', dpi=1200)
+    fig2.savefig('myimage2.eps', format='eps', dpi=1200)
+    
+    
 
 def plot_mass_scan():
     print("plotting mass scan")
@@ -249,14 +263,16 @@ def plot_mass_scan():
  
     means = [[] for _ in range(len(paths))]
     stddev = [[] for _ in range(len(paths))]
+    stderr = [[] for _ in range(len(paths))]
 
     for m in range(len(chosenchannels)):
         count1 = 0
         for i in range(len(paths)):
             count2 = count1 + lengths[i] 
             means[i].append(np.mean(y[m][count1:count2]))
-            #Need to also calculate the standard error of the mean
             stddev[i].append(np.std(y[m][count1:count2]))
+            n = len(y[m][count1:count2])
+            stderr[i].append(np.std(y[m][count1:count2])/np.sqrt(n))
             count1 = count2
                 
     ind = np.arange(len(chosenchannels))
@@ -275,7 +291,7 @@ def plot_mass_scan():
         ax.bar(ind + ind*(len(paths)*width) + width*i, means[i], width, 
             color=fc, alpha=.5, align='edge',
             error_kw=dict(ecolor='k', lw=1.5, capsize=3, capthick=1.5), 
-            yerr=stddev[i], label=paths[i])
+            yerr=stderr[i], label=paths[i])
         
     ax.set_ylabel(ylabel)
     ax.set_xlabel("Mass/charge ratio")
@@ -283,6 +299,7 @@ def plot_mass_scan():
     xlabels = [n[4:-2] for n in chosenchannels]
     ax.set_xticklabels(xlabels)
     ax.legend()
+
     plt.show()
 
 def get_ydata(yoption, channels, channel_keys):
@@ -363,7 +380,7 @@ def use_readme():
     cycles = []
     y_calibdata = []
     y_errcalibdata = []
-    inverse_stddev = []
+    stddevs = []
     
     with open(params[4].get()) as file:
         searchlines = file.readlines()
@@ -377,6 +394,8 @@ def use_readme():
             time = l.split(',')
             time = [m.strip() for m in time]
             times.append(time)
+        for l in searchlines[indices[4]+1:indices[5]]:
+            ax1.set(title = params[9] + ' ' + l)
 
     for x in range(len(times)):
         datetime_object1 = datetime.datetime.strptime(
@@ -390,7 +409,6 @@ def use_readme():
                                    
     cycle_labels = [string.ascii_uppercase[x] 
         + '. ' + times[x][2] for x in range(len(cycles))]
-
 
        # for x in range(10):   
        #     time = datetime.datetime.strptime(reloffset, 
@@ -410,7 +428,7 @@ def use_readme():
             
         ax1.annotate('', xy=(params[11][(cycles[x])[0]], arrow_height-0.1), 
             xytext=(params[11][(cycles[x])[1]], arrow_height-0.1), 
-            arrowprops=dict(arrowstyle="<->", color='b'))
+            arrowprops=dict(connectionstyle="arc3", arrowstyle="-", color='b'))
             
         ax1.annotate(
             cycle_labels[x][0],((params[11][cycles[x][0]
@@ -427,41 +445,60 @@ def use_readme():
                 + '\nstd. err.: ' + str(stderr) + '\n')
             y_calibdata.append(mean)
             y_errcalibdata.append(stderr)
-            inverse_stddev.append(1/stddev)
+            stddevs.append(stddev)
     
     if params[7].get() == 1:
-            
-            _, ax2 = plt.subplots()
-            dilution = []
-            # dilution = [1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
-            #[0, 1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] for benzene
-            #[0, 5e-3, 0.01, 0.015, 0.02, 0.025, 0.03] # correct for diethyl ether
-            for x in range(len(cycles)):
-                dilution.append(float(times[x][2]))
-            
-            print(len(dilution), len(y_calibdata))         
-            ax2.errorbar(dilution, y_calibdata, yerr=y_errcalibdata,
-                                fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
-                                color='k', capthick=1.5)#, label=chosenchannels[0]
-        
-            fitted_data = np.polyfit(dilution, y_calibdata, 1, full=True, 
-                w=inverse_stddev)
-        
-            print(fitted_data)
-        
-            label = str(np.poly1d(fitted_data[0]))
-             
-            ax2.plot(dilution, np.polyval(np.poly1d(fitted_data[0]), dilution), 
-                'r-', lw=1.5, label='y = ' + label[2:])
 
-            ax2.tick_params(which='both',direction='in',top=True, right=True)
-            ax2.set( xlabel='Dilution factor',
-                    ylabel = 'Measured concentration (ppb)')#title=title,
+        #Need to get a title, use polyfit for getting m, m_sigma, c and c_sigma
+        #and use linregress for the r_value. Need also to get dilution/predicted
+        #concentration from file
                     
-            leg = ax2.legend()
-            leg.get_frame().set_alpha(1)
-            leg.get_frame().set_edgecolor('white')
-            ax2.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
+        
+
+        dilution = []
+        for x in range(len(cycles)):
+            dilution.append(float(times[x][2]))
+            
+        #dilution = 
+        #[0, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]
+        #[1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
+        #[0, 1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] for benzene
+        #[0, 5e-3, 0.01, 0.015, 0.02, 0.025, 0.03] # correct for diethyl ether
+
+        ax2.errorbar(dilution, y_calibdata, yerr=y_errcalibdata,
+                        fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
+                        color='k', capthick=1.5, label=chosenchannels[0])
+
+        f, V  = np.polyfit(dilution, y_calibdata, 1, cov=True, w=stddevs)
+        
+        title = params[9] + ' characterisation'
+        ax2.plot(dilution, np.polyval(np.poly1d(f), dilution), 
+            'r-', lw=1.5, label='Linear fit')
+
+        ax2.tick_params(which='both',direction='in',top=True, right=True)
+        ax2.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
+        ax2.set(xlabel='Dilution factor', 
+            ylabel = 'Measured\nconcentration (ppb)', title=title)        
+        leg = ax2.legend().get_frame()
+        leg.set_alpha(1)
+        leg.set_edgecolor('white')
+
+        slope, intercept, r_value, _, std_err = linregress(dilution, y_calibdata)
+
+        filename = params[9] + ' ' + chosenchannels[0].replace("/", "") + ".txt"
+        with open(filename, 'w') as fi:
+            fi.write(chosenchannels[0])
+            fi.write('\ny = mx + c\n')
+            fi.write('numpy polyfit\n')
+            fi.write('m = {}, sigma_m = {}\n'.format(f[0],np.sqrt(V[0][0])))
+            fi.write('c = {}, sigma_c = {}\n'.format(f[1],np.sqrt(V[1][1])))
+            fi.write('scipy linregress\n')
+            fi.write('m = {}\n'.format(slope))
+            fi.write('c = {}\n'.format(intercept))
+            fi.write('r_value = {}\n'.format(r_value))
+            fi.write('sigma_m = {}\n'.format(std_err))
+
+        
 
 window = Tk()
 select_param()
