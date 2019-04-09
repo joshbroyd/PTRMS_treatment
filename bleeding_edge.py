@@ -13,6 +13,7 @@ from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 from scipy.stats import linregress
 
+#Make params into a dict.
 
 #Changes the font and fontsize of the graphs 
 if __name__ == "__main__":
@@ -31,13 +32,23 @@ if __name__ == "__main__":
 
 def select_param():
     
-    global params
+    global params, specdir
     params = [[] for _ in range(9)]
+
+    print(len(params))
+
     commands = [getdatapaths, getreadmepath, loaddata, plot, close]
-    commandtext = ["Open files", "Readme file" , "Load data", "Plot", "Exit"] 
+    commandtext = ["Add Excel Files", "Add Project File" , "Load data", "Plot",
+        "Exit"] 
     for i in range(len(commandtext)):
         Button(window, text=commandtext[i], command=commands[i]).grid(row=i, 
         sticky="NESW")
+
+    Button(window, text="Add Spectra Folder", command=getspecfolder).grid(row=5, 
+        sticky="NESW")
+    specdir = Entry(window)
+    specdir.grid(column=1, row=5)
+
 
     Label(window, text="Moving average\nduration (seconds)").grid(row=4,
         column=2, sticky="NESW")
@@ -83,6 +94,12 @@ def getreadmepath():
         initialdir="/home/jgb509/Documents/CRM/Data"))
     params[4].insert("0", path)
 
+def getspecfolder():
+    path = filedialog.askdirectory(parent=window,
+        title='Choose spectroscopy folder', 
+        initialdir="/home/jgb509/Documents/CRM/Spectroscopy")
+    specdir.insert("0", path)
+
 def loaddata():
     global tickboxes
     tickboxes = []
@@ -94,14 +111,14 @@ def loaddata():
                 entry = IntVar()
                 tickbox = Checkbutton(window, text=channels[m][n],
                             variable=entry)
-                tickbox.grid(row=5+n, column=m-1, sticky="NESW") #m+(len(channel_keys[0])/14 + 1)
+                tickbox.grid(row=6+n, column=m-1, sticky="NESW") #m+(len(channel_keys[0])/14 + 1)
                 params[8][m].append(entry)
                 tickboxes.append(tickbox)
     
     if params[2].get() == "Time series":
         for n in range(len(channels[0])):
             x = n//14 + 2
-            y = n + 5 - (n//14 * 14)           
+            y = n + 6 - (n//14 * 14)           
             entry = IntVar()
             tickbox = Checkbutton(window, text=channels[0][n], 
                         variable=entry)
@@ -160,11 +177,96 @@ def convertparam(param):
 def plot():
     if params[2].get() == "Time series":
         plot_time_series()
+        if specdir.get() != '':
+            plot_spectroscopy()
+        plt.show()
+
         for tickbox in tickboxes:
             tickbox.destroy()
 
     elif params[2].get() == "Mass scan":
         plot_mass_scan()
+
+def plot_spectroscopy():
+
+    folder_name = specdir.get() + '/'
+   # print(folder_name)
+
+    filenames = os.listdir(folder_name)
+    filenames.sort()
+    filenames = [folder_name + f for f in filenames]
+  #  print(filenames)
+
+# OH peak at 308.92nm, NH peak at 336.30nm, N2 peak at 357.56nm
+ 
+    xdata = []
+    ydata = [[] for _ in range(4)]
+
+    for f in filenames:        
+
+        with open(f) as file:
+            data = file.readlines()
+            for line in data:
+                if "Date:" in line:
+                    xdata.append(datetime.datetime.strptime(params[9] + ' ' + line.strip().split()[4], "%Y-%m-%d %H:%M:%S"))
+                if "308.92" in line:
+                    ydata[0].append(float(line.strip().split()[1]))
+                if "336.30" in line:
+                    ydata[1].append(float(line.strip().split()[1]))
+                if "357.56" in line:
+                    ydata[2].append(float(line.strip().split()[1]))
+                
+
+    ax2 = ax1.twinx()
+    ax3 = ax1.twinx()
+    ax4 = ax1.twinx()
+
+    ax2.axes.get_yaxis().set_ticks([])
+    ax3.axes.get_yaxis().set_ticks([])
+    ax4.axes.get_yaxis().set_ticks([])
+
+    ax1.plot(xdata[0], [0], label= "308.92nm peak",lw=2,color='r')
+    ax1.plot(xdata[0], [0], ls='--', label= "336.30nm peak",lw=2,color='b')
+    ax1.plot(xdata[0], [0], ls=':', label= "357.56nm peak",lw=2,color='g')
+
+    ax2.plot(xdata, ydata[0], label= "308.92nm peak",lw=2,color='r')
+    ax3.plot(xdata, ydata[1], ls='--', label= "336.30nm peak",lw=2,color='b') #[:100] for the increase after just plasma on
+    ax4.plot(xdata, ydata[2], ls=':', label= "357.56nm peak",lw=2,color='g')
+
+'''
+folder_name = "1slm ar 40Wf without benzene/"
+
+filenames = os.listdir(folder_name)
+filenames.sort()
+filenames = [folder_name + f for f in filenames]
+
+# OH peak at 308.92nm, NH peak at 336.30nm, N2 peak at 357.56nm
+ 
+xdata = []
+ydata = [[] for _ in range(4)]
+
+for f in filenames:        
+
+    with open(f) as file:
+        data = file.readlines()
+        for line in data:
+            if "Date:" in line:
+                xdata.append(datetime.datetime.strptime("2019-02-27 " + line.strip().split()[4], "%Y-%m-%d %H:%M:%S"))
+            if "308.92" in line:
+                ydata[0].append(float(line.strip().split()[1]))
+            if "336.30" in line:
+                ydata[1].append(float(line.strip().split()[1]))
+            if "357.56" in line:
+                ydata[2].append(float(line.strip().split()[1]))
+
+ax2.plot(xdata, ydata[0],lw=2,color='r')
+ax3.plot(xdata, ydata[1], ls='--',lw=2,color='b') #[:100] for the increase after just plasma on
+ax4.plot(xdata, ydata[2], ls=':',lw=2,color='g')
+
+#ax1.xlabel("Wavelength (nm)")
+#ax1.ylabel("Absolute Irradiance ($\mu$W/cm$^{2}$/nm)")'''
+
+
 
 def plot_time_series():
     print("plotting time series")
@@ -215,12 +317,16 @@ def plot_time_series():
 
     title = date + ' experiment'
     ax1.set(xlabel=xlabel, ylabel=ylabel, title = title)
-    if params[4].get() != '':
+    if params[4].get() != '' or specdir != '':
+        # DO NOT use append to append to params - the shape of params should be 
+        # left alone
+        print('adding things to params')
         params.append(date)
         params.append(absolute_time)
         params.append(xdata)
         params.append(ydata)
-        use_readme()
+        if params[4].get() != '':
+            use_readme()
     
     ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
     ax1.yaxis.set_minor_formatter(ScalarFormatter())
@@ -232,12 +338,12 @@ def plot_time_series():
     figManager = plt.get_current_fig_manager()
     figManager.window.showMaximized()
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.show()
+   # plt.show()
 
-    fig1.savefig('myimage.svg', format='svg', dpi=1200)
-    fig1.savefig('myimage.eps', format='eps', dpi=1200)
-    fig2.savefig('myimage2.svg', format='svg', dpi=1200)
-    fig2.savefig('myimage2.eps', format='eps', dpi=1200)
+   # fig1.savefig('myimage.svg', format='svg', dpi=1200)
+   # fig1.savefig('myimage.eps', format='eps', dpi=1200)
+   # fig2.savefig('myimage2.svg', format='svg', dpi=1200)
+   # fig2.savefig('myimage2.eps', format='eps', dpi=1200)
     
     
 
