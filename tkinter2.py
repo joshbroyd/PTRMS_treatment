@@ -17,7 +17,7 @@ class Application(Frame):
                 self.channel_entries[m].append(entry)
                 self.tickboxes.append(tickbox)
         
-        if len(channels[0]) > 20:
+        if len(channels[0]) > 19:
             mz_channels = [n.split() for n in channels[0]]
             available_mz = ("m/z " + str(mz_channels[0][1]) + " to " 
                 + str(mz_channels[-1][1]) + " are available")
@@ -97,6 +97,8 @@ class Application(Frame):
             row=5, column=0, sticky="NSEW")
             
     def get_excel_paths(self):
+        #This needs to be here to insert the pathnames to the entry, 
+        #does it though? if the entry itself is an attribute to this class?
         self.file_paths = filedialog.askopenfilenames(
             initialdir="/home/jgb509/Documents/CRM/Data")
         self.file_entry.insert("0", self.file_paths)
