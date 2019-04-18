@@ -1,6 +1,7 @@
 from tkinter import (Frame, Tk, Button, filedialog, Entry, OptionMenu, 
                     StringVar, Label, IntVar, Checkbutton)
 import pandas as pd
+import numpy as np
 
 class Application(Frame):
     
@@ -97,8 +98,7 @@ class Application(Frame):
             row=5, column=0, sticky="NSEW")
             
     def get_excel_paths(self):
-        #This needs to be here to insert the pathnames to the entry, 
-        #does it though? if the entry itself is an attribute to this class?
+        #This needs to be here to create the attribute file_paths
         self.file_paths = filedialog.askopenfilenames(
             initialdir="/home/jgb509/Documents/CRM/Data")
         self.file_entry.insert("0", self.file_paths)
@@ -107,9 +107,7 @@ class Application(Frame):
     def __init__(self, master=None):
         Frame.__init__(self, master)
         self.pack()
-        self.createWidgets()
-
-
+        self.createWidgets()    
 
 def get_readme_path():
     app.readme_path.insert("0", filedialog.askopenfilename(
@@ -137,8 +135,63 @@ def get_channels():
 
     return all_channels
 
+# Converts the user input to parameter list
+def convertparam(param):
+    
+    if '-' in param:
+        i = param.index('-')
+        MIN = float(param[:i])
+        MAX = float(param[i+1:])
+        STEP = 1.0
+        NUM = int((MAX-MIN) / STEP+1)        
+        param = np.linspace(MIN, MAX, NUM)
+        
+    elif '-' not in param and ',' in param:
+        param = [float(n) for n in param.split(',')]
+    
+    elif '-' not in param and ',' not in param:
+        param = [float(param)]
+       
+    return param
+
 def plot_time_series():
     print("plotting time series")
+
+    if app.xformat.get() == "Absolute Time":
+        print("setting xaxis format to absolute time")
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S')) 
+
+    all_channels = get_channels()
+    channels = [i.get() for i in app.channel_entries[0]]                   
+
+def get_ydata(channels, channel_keys):
+#Args are corresponding to raw counts or concentration and the list of channel 
+#keys. Returns a list of lists of ydata from the corresponding channels and 
+#yoption and the yaxis label. 
+
+    chosenchannels = []
+    for n in range(len(channels)):
+        if channels[n] == 1:
+            chosenchannels.append(channel_keys[n])
+ 
+    y = [[] for _ in range(len(chosenchannels))]      
+    for f in paths:
+        data = pd.read_excel(f, sheet_name=app.yformat.get())
+        for i in range(len(chosenchannels)):
+            tmp = np.asarray(data[chosenchannels[i]])
+            tmp = [0 if item == '#NV' else item for item in tmp]
+            y[i].extend(tmp)
+    
+    if app.yformat.get() == "Raw signal intensities":
+            ylabel = "Raw signal intensity (cps)"
+           
+    elif app.yformat.get() == "Concentration":
+        ylabel = "Concentration (ppb)"
+            
+    elif app.yformat.get() == "Instrument" or app.yformat.get() == "Reaction conditions" :
+        ylabel = "ARB"
+        
+    return y, ylabel, chosenchannels
 
 def plot_mass_scan():
     print("plotting mass scan")
