@@ -1,11 +1,34 @@
 # Need to plot wavelength vs average y-value and plot error 
 # bars/boxplot to see where the largest changes are.
 import os
+import matplotlib as mpl
+mpl.use('qt5agg') #WXAgg
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-folder_name = "/home/jgb509/Documents/CRM/Spectroscopy/20190404_OHN2_DE_cl2/plasma_on/"
+
+#Changes the font and fontsize of the graphs 
+if __name__ == "__main__":
+
+    fontsize = 35
+    params = {'backend':'qt5agg',
+            'text.latex.preamble':['\\usepackage{gensymb}'],
+            'axes.labelsize':fontsize,
+            'axes.titlesize':fontsize,
+            'font.size':fontsize,
+            'legend.fontsize':fontsize-5,
+            'xtick.labelsize':fontsize-5,
+            'ytick.labelsize':fontsize-5,
+            'font.family':'serif'}
+    mpl.rcParams.update(params)
+
+
+plt.rc('text', usetex=True)
+
+
+#folder_name = "/home/jgb509/Documents/CRM/Spectroscopy/20190404_OHN2_DE_cl2/plasma_on/"
+folder_name = "/home/jgb509/Documents/CRM/Spectroscopy/20190418_OHN2_OH_acetoneCO2_test/plasma_on/"
    # print(folder_name)
 
 filenames = os.listdir(folder_name)
@@ -43,7 +66,8 @@ ydatameans = [np.mean(i) for i in ydata]
 plt.errorbar(xdata, ydatameans, yerr=ydatastddev,
                         fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
                         color='k', capthick=1.5)
-
+plt.xlabel("Wavelength (nm)")
+plt.ylabel(r"Absolute Irradiance ($\mu$ W/cm$^2$/nm)") 
 plt.show()
 
                 

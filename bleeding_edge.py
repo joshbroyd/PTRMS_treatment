@@ -30,6 +30,8 @@ if __name__ == "__main__":
             'font.family':'serif'}
     mpl.rcParams.update(params)
 
+plt.rc('text', usetex=True)
+
 def select_param():
     
     global params, specdir
@@ -197,7 +199,7 @@ def plot_spectroscopy():
     filenames = [folder_name + f for f in filenames]
   #  print(filenames)
 
-# OH peak at 308.92nm, NH peak at 336.30nm, N2 peak at 357.56nm
+# OH peak at 308.92nm, N2 peaks at 336.30nm, 357.56nm
  
     xdata = []
     ydata = [[] for _ in range(4)]
@@ -211,26 +213,32 @@ def plot_spectroscopy():
                     xdata.append(datetime.datetime.strptime(params[9] + ' ' + line.strip().split()[4], "%Y-%m-%d %H:%M:%S"))
                 if "308.92" in line:
                     ydata[0].append(float(line.strip().split()[1]))
-                if "336.30" in line:
-                    ydata[1].append(float(line.strip().split()[1]))
+         #       if "336.30" in line:
+         #           ydata[1].append(float(line.strip().split()[1]))
                 if "357.56" in line:
                     ydata[2].append(float(line.strip().split()[1]))
                 
 
     ax2 = ax1.twinx()
-    ax3 = ax1.twinx()
+   # ax3 = ax1.twinx()
     ax4 = ax1.twinx()
+    
+  #  ax2.spines["right"].set_position(("axes", 1.1))
+    ax4.spines["right"].set_position(("axes", 1.2))
+    
+    ax2.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 308.92 nm (OH peak)", color='r')
+    ax4.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 357.56 nm (N2 peak)", color='g')
 
-    ax2.axes.get_yaxis().set_ticks([])
-    ax3.axes.get_yaxis().set_ticks([])
-    ax4.axes.get_yaxis().set_ticks([])
+   # ax2.axes.get_yaxis().set_ticks([])
+   # ax3.axes.get_yaxis().set_ticks([])
+   # ax4.axes.get_yaxis().set_ticks([])
 
     ax1.plot(xdata[0], [0], label= "308.92nm peak",lw=2,color='r')
-    ax1.plot(xdata[0], [0], ls='--', label= "336.30nm peak",lw=2,color='b')
+  #  ax1.plot(xdata[0], [0], ls='--', label= "336.30nm peak",lw=2,color='b')
     ax1.plot(xdata[0], [0], ls=':', label= "357.56nm peak",lw=2,color='g')
 
     ax2.plot(xdata, ydata[0], label= "308.92nm peak",lw=2,color='r')
-    ax3.plot(xdata, ydata[1], ls='--', label= "336.30nm peak",lw=2,color='b') #[:100] for the increase after just plasma on
+ #   ax3.plot(xdata, ydata[1], ls='--', label= "336.30nm peak",lw=2,color='b') #[:100] for the increase after just plasma on
     ax4.plot(xdata, ydata[2], ls=':', label= "357.56nm peak",lw=2,color='g')
 
 '''
@@ -277,7 +285,7 @@ def plot_time_series():
 
     if params[1].get() == "Absolute Time":
         print("setting xaxis format to absolute time")
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))                    
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))  # :%S                 
                 
     markercolours = itertools.cycle(['k','lightgreen','r','magenta',
                                      'midnightblue','darkorange'])
@@ -337,7 +345,7 @@ def plot_time_series():
     
     figManager = plt.get_current_fig_manager()
     figManager.window.showMaximized()
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+   # ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
    # plt.show()
 
    # fig1.savefig('myimage.svg', format='svg', dpi=1200)
