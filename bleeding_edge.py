@@ -200,6 +200,7 @@ def plot_spectroscopy():
   #  print(filenames)
 
 # OH peak at 308.92nm, N2 peaks at 336.30nm, 357.56nm
+# O peak at 777.25nm and 844.66nm
  
     xdata = []
     ydata = [[] for _ in range(4)]
@@ -211,6 +212,10 @@ def plot_spectroscopy():
             for line in data:
                 if "Date:" in line:
                     xdata.append(datetime.datetime.strptime(params[9] + ' ' + line.strip().split()[4], "%Y-%m-%d %H:%M:%S"))
+        #        if "777.25" in line:
+        #            ydata[0].append(float(line.strip().split()[1]))
+        #        if "844.66" in line:
+        #            ydata[1].append(float(line.strip().split()[1]))
                 if "308.92" in line:
                     ydata[0].append(float(line.strip().split()[1]))
          #       if "336.30" in line:
@@ -228,14 +233,19 @@ def plot_spectroscopy():
     
     ax2.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 308.92 nm (OH peak)", color='r')
     ax4.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 357.56 nm (N2 peak)", color='g')
+    
+  #  ax2.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 777.25 nm (O peak)", color='r')
+  #  ax4.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 844.66 nm (O peak)", color='g')
+  #  ax2.plot(xdata, ydata[0], label= "777.25 nm peak",lw=2,color='r')
+  #  ax4.plot(xdata, ydata[1], ls=':', label= "844.66 nm peak",lw=2,color='g')
 
    # ax2.axes.get_yaxis().set_ticks([])
    # ax3.axes.get_yaxis().set_ticks([])
    # ax4.axes.get_yaxis().set_ticks([])
 
-    ax1.plot(xdata[0], [0], label= "308.92nm peak",lw=2,color='r')
+  #  ax1.plot(xdata[0], [0], label= "308.92nm peak",lw=2,color='r')
   #  ax1.plot(xdata[0], [0], ls='--', label= "336.30nm peak",lw=2,color='b')
-    ax1.plot(xdata[0], [0], ls=':', label= "357.56nm peak",lw=2,color='g')
+  #  ax1.plot(xdata[0], [0], ls=':', label= "357.56nm peak",lw=2,color='g')
 
     ax2.plot(xdata, ydata[0], label= "308.92nm peak",lw=2,color='r')
  #   ax3.plot(xdata, ydata[1], ls='--', label= "336.30nm peak",lw=2,color='b') #[:100] for the increase after just plasma on

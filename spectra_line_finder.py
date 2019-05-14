@@ -28,7 +28,8 @@ plt.rc('text', usetex=True)
 
 
 #folder_name = "/home/jgb509/Documents/CRM/Spectroscopy/20190404_OHN2_DE_cl2/plasma_on/"
-folder_name = "/home/jgb509/Documents/CRM/Spectroscopy/20190418_OHN2_OH_acetoneCO2_test/plasma_on/"
+#folder_name = "/home/jgb509/Documents/CRM/Spectroscopy/20181207_broadband_readings/500sccm_argon_41Wf_1Wr/"
+folder_name = "/home/jgb509/Documents/CRM/Spectroscopy/20190513_broadband_and_OHN2_O2_test/Broadband/Plasma_on/"
    # print(folder_name)
 
 filenames = os.listdir(folder_name)
