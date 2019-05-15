@@ -13,7 +13,20 @@ from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 from scipy.stats import linregress
 
-#Make params into a dict.
+#Params:
+#0 yaxis format
+#1 xaxis format
+#2 Time series or mass scan
+#3 Absolute time when trel =0
+#4 README path
+#5 Excel file paths
+#6 Moving average duration
+#7 Calibration boolean
+#8 [usr chosen channels, inst, cond]
+#9 date as str
+#10 [absolute time]
+#11 xdata
+#12 ydata
 
 #Changes the font and fontsize of the graphs 
 if __name__ == "__main__":
