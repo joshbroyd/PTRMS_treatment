@@ -31,7 +31,7 @@ from scipy.stats import linregress
 #Changes the font and fontsize of the graphs 
 if __name__ == "__main__":
 
-    fontsize = 35
+    fontsize = 20
     params = {'backend':'qt5agg',
             'text.latex.preamble':['\\usepackage{gensymb}'],
             'axes.labelsize':fontsize,
@@ -43,14 +43,12 @@ if __name__ == "__main__":
             'font.family':'serif'}
     mpl.rcParams.update(params)
 
-plt.rc('text', usetex=True)
+#plt.rc('text', usetex=True)
 
 def select_param():
     
-    global params, specdir
+    global params, specdir, lines
     params = [[] for _ in range(9)]
-
-    print(len(params))
 
     commands = [getdatapaths, getreadmepath, loaddata, plot, close]
     commandtext = ["Add Excel Files", "Add Project File" , "Load data", "Plot",
@@ -59,11 +57,28 @@ def select_param():
         Button(window, text=commandtext[i], command=commands[i]).grid(row=i, 
         sticky="NESW")
 
-    Button(window, text="Add Spectra Folder", command=getspecfolder).grid(row=5, 
-        sticky="NESW")
-    specdir = Entry(window)
-    specdir.grid(column=1, row=5)
-
+    Button(window, text="Add Broadband Spectra Folder", command=getbspecfolder).grid(row=0, 
+        column=4, sticky="NESW")
+    bspecdir = Entry(window)
+    bspecdir.grid(column=5, row=0)
+    
+    blines = Entry(window)
+    blines.grid(row=1, column=5)
+    blines.insert("0", "777.25, 844.66")
+    Label(window, text="Broadband lines \n (O peak at 777.25nm and 844.66nm):").grid(row=1, column=4, sticky="NSEW")
+    
+    Button(window, text="Add OHN2 Spectra Folder", command=getospecfolder).grid(row=2, 
+        column=4, sticky="NESW")
+    ospecdir = Entry(window)
+    ospecdir.grid(column=5, row=2)
+    
+    Label(window, text="OHN2 lines (OH peak at 308.92nm, \nN2 peaks at 336.30nm, 357.56nm):").grid(row=3, column=4, sticky="NSEW")
+    olines = Entry(window)
+    olines.grid(row=3, column=5)
+    olines.insert("0", "308.92, 336.30, 357.56")
+    
+    lines = [olines, blines]
+    specdir = [ospecdir, bspecdir]
 
     Label(window, text="Moving average\nduration (seconds)").grid(row=4,
         column=2, sticky="NESW")
@@ -109,11 +124,17 @@ def getreadmepath():
         initialdir="/home/jgb509/Documents/CRM/Data"))
     params[4].insert("0", path)
 
-def getspecfolder():
+def getbspecfolder():
     path = filedialog.askdirectory(parent=window,
         title='Choose spectroscopy folder', 
         initialdir="/home/jgb509/Documents/CRM/Spectroscopy")
-    specdir.insert("0", path)
+    specdir[1].insert("0", path)
+   
+def getospecfolder():
+    path = filedialog.askdirectory(parent=window,
+        title='Choose spectroscopy folder', 
+        initialdir="/home/jgb509/Documents/CRM/Spectroscopy")
+    specdir[0].insert("0", path)
 
 def loaddata():
     global tickboxes
@@ -192,8 +213,13 @@ def convertparam(param):
 def plot():
     if params[2].get() == "Time series":
         plot_time_series()
-        if specdir.get() != '':
-            plot_spectroscopy()
+        if specdir[0].get() != '' and specdir[1].get() == '':
+            plot_spectroscopy('ohn2')
+        if specdir[1].get() != '' and specdir[0].get() == '':
+            plot_spectroscopy('broad')
+        if specdir[0].get() != '' and specdir[1].get() != '':
+            plot_spectroscopy('both')
+        
         plt.show()
 
         for tickbox in tickboxes:
@@ -202,103 +228,47 @@ def plot():
     elif params[2].get() == "Mass scan":
         plot_mass_scan()
 
-def plot_spectroscopy():
+def plot_spectroscopy(param):
 
-    folder_name = specdir.get() + '/'
-   # print(folder_name)
+    if param == 'ohn2':
+        folder_name = specdir[0].get() + '/'
+        specline = convertparam(lines[0].get())
+    elif param == 'broad':
+        folder_name = specdir[1].get() + '/'
+        specline = convertparam(lines[1].get())
+    elif param == 'both':
+        print("still to do")
 
     filenames = os.listdir(folder_name)
     filenames.sort()
-    filenames = [folder_name + f for f in filenames]
-  #  print(filenames)
-
-# OH peak at 308.92nm, N2 peaks at 336.30nm, 357.56nm
-# O peak at 777.25nm and 844.66nm
- 
+    filenames = [folder_name + f for f in filenames] 
     xdata = []
-    ydata = [[] for _ in range(4)]
+    ydata = [[] for _ in range(len(specline))]
 
     for f in filenames:        
-
         with open(f) as file:
             data = file.readlines()
             for line in data:
                 if "Date:" in line:
                     xdata.append(datetime.datetime.strptime(params[9] + ' ' + line.strip().split()[4], "%Y-%m-%d %H:%M:%S"))
-        #        if "777.25" in line:
-        #            ydata[0].append(float(line.strip().split()[1]))
-        #        if "844.66" in line:
-        #            ydata[1].append(float(line.strip().split()[1]))
-                if "308.92" in line:
-                    ydata[0].append(float(line.strip().split()[1]))
-         #       if "336.30" in line:
-         #           ydata[1].append(float(line.strip().split()[1]))
-                if "357.56" in line:
-                    ydata[2].append(float(line.strip().split()[1]))
+                for i in range(len(specline)):
+                    if str(specline[i]) in line:
+                        ydata[i].append(float(line.strip().split()[1]))
                 
-
-    ax2 = ax1.twinx()
-   # ax3 = ax1.twinx()
-    ax4 = ax1.twinx()
+    if len(specline) == 1:
+        ax2 = ax1.twinx()
+        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(specline[0])), color='r')
+        ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(specline[0])),lw=2,color='r')
     
-  #  ax2.spines["right"].set_position(("axes", 1.1))
-    ax4.spines["right"].set_position(("axes", 1.2))
+    elif len(specline) == 2:
+        ax2 = ax1.twinx()
+        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(specline[0])), color='r')
+        ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(specline[0])),lw=2,color='r')
+        ax3 = ax1.twinx()
+        ax3.spines["right"].set_position(("axes", 1.1))
+        ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(specline[1])), color='g')
+        ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(specline[1])),lw=2,color='g')
     
-    ax2.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 308.92 nm (OH peak)", color='r')
-    ax4.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 357.56 nm (N2 peak)", color='g')
-    
-  #  ax2.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 777.25 nm (O peak)", color='r')
-  #  ax4.set_ylabel(r"Absolute Irradiance ($\mu$W/cm$^2$/nm)\\ 844.66 nm (O peak)", color='g')
-  #  ax2.plot(xdata, ydata[0], label= "777.25 nm peak",lw=2,color='r')
-  #  ax4.plot(xdata, ydata[1], ls=':', label= "844.66 nm peak",lw=2,color='g')
-
-   # ax2.axes.get_yaxis().set_ticks([])
-   # ax3.axes.get_yaxis().set_ticks([])
-   # ax4.axes.get_yaxis().set_ticks([])
-
-  #  ax1.plot(xdata[0], [0], label= "308.92nm peak",lw=2,color='r')
-  #  ax1.plot(xdata[0], [0], ls='--', label= "336.30nm peak",lw=2,color='b')
-  #  ax1.plot(xdata[0], [0], ls=':', label= "357.56nm peak",lw=2,color='g')
-
-    ax2.plot(xdata, ydata[0], label= "308.92nm peak",lw=2,color='r')
- #   ax3.plot(xdata, ydata[1], ls='--', label= "336.30nm peak",lw=2,color='b') #[:100] for the increase after just plasma on
-    ax4.plot(xdata, ydata[2], ls=':', label= "357.56nm peak",lw=2,color='g')
-
-'''
-folder_name = "1slm ar 40Wf without benzene/"
-
-filenames = os.listdir(folder_name)
-filenames.sort()
-filenames = [folder_name + f for f in filenames]
-
-# OH peak at 308.92nm, NH peak at 336.30nm, N2 peak at 357.56nm
- 
-xdata = []
-ydata = [[] for _ in range(4)]
-
-for f in filenames:        
-
-    with open(f) as file:
-        data = file.readlines()
-        for line in data:
-            if "Date:" in line:
-                xdata.append(datetime.datetime.strptime("2019-02-27 " + line.strip().split()[4], "%Y-%m-%d %H:%M:%S"))
-            if "308.92" in line:
-                ydata[0].append(float(line.strip().split()[1]))
-            if "336.30" in line:
-                ydata[1].append(float(line.strip().split()[1]))
-            if "357.56" in line:
-                ydata[2].append(float(line.strip().split()[1]))
-
-ax2.plot(xdata, ydata[0],lw=2,color='r')
-ax3.plot(xdata, ydata[1], ls='--',lw=2,color='b') #[:100] for the increase after just plasma on
-ax4.plot(xdata, ydata[2], ls=':',lw=2,color='g')
-
-#ax1.xlabel("Wavelength (nm)")
-#ax1.ylabel("Absolute Irradiance ($\mu$W/cm$^{2}$/nm)")'''
-
-
-
 def plot_time_series():
     print("plotting time series")
     global ax1, ax2, chosenchannels
@@ -308,7 +278,7 @@ def plot_time_series():
 
     if params[1].get() == "Absolute Time":
         print("setting xaxis format to absolute time")
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))  # :%S                 
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))  #                  
                 
     markercolours = itertools.cycle(['k','lightgreen','r','magenta',
                                      'midnightblue','darkorange'])
@@ -362,7 +332,7 @@ def plot_time_series():
     ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
     ax1.yaxis.set_minor_formatter(ScalarFormatter())
     ax1.yaxis.set_major_formatter(ScalarFormatter())
-    leg = ax1.legend().get_frame() #ncol=2
+    leg = ax1.legend(ncol=3).get_frame() #
     leg.set_alpha(0.8)
     leg.set_edgecolor('white')
     
@@ -514,7 +484,9 @@ def use_readme():
 
     indices = []
     times = []
+    events = []
     cycles = []
+    eventcycles = []
     y_calibdata = []
     y_errcalibdata = []
     stddevs = []
@@ -532,7 +504,23 @@ def use_readme():
             time = [m.strip() for m in time]
             times.append(time)
         for l in searchlines[indices[4]+1:indices[5]]:
-            ax1.set(title = params[9] + ' ' + l)
+            ax1.set(title = params[9] + ' ' + l)      
+        for l in searchlines[indices[6]+1:indices[7]]:
+            dilution = l.split(',')
+            dilution = [m.strip() for m in dilution]
+        for l in searchlines[indices[8]+1:indices[9]]:
+          #  event = l.split(',')
+          #  event = [m.strip() for m in event]
+            events.append(l)
+            
+  #  ax1.plot((params[11])[0],[0],color='purple',label="N$_2$ temperature taken")
+  #  for x in range(len(events)):
+  #      datetime_object1 = datetime.datetime.strptime(
+  #          params[9] + ' ' + events[x].strip(), '%Y-%m-%d %H:%M:%S')
+  #      cycle = bisect.bisect_right(params[10], datetime_object1)
+  #      eventcycles.append(cycle)
+  #   for x in range(len(eventcycles)):
+  #      ax1.axvline(params[11][eventcycles[x]],lw=1.5, color = 'purple')
 
     for x in range(len(times)):
         datetime_object1 = datetime.datetime.strptime(
@@ -553,23 +541,23 @@ def use_readme():
        #     cycle = bisect.bisect_right(absolute_time, time)
        #     ax1.axvline(xdata[cycle],lw=1, color = 'r')
 
-
+    
+    
     for x in range(len(cycles)):
         #can change this  len(cycles) to the labels you want to show
                  
-        arrow_height=sum(params[12][0])/len(params[12][0])
+        arrow_height=sum(params[12][0])/len(params[12][0]) - x
              
-        ax1.axvline(params[11][(cycles[x])[0]],lw=1.5, color = 'b')
-        ax1.axvline(params[11][(cycles[x])[1]],lw=1.5, color = 'b')
-          #  ax1.plot(xdata[0],[0], label=cycle_labels[x], color='white')
+        ax1.axvline(params[11][(cycles[x])[0]],lw=1.5, color = times[x][3], label=cycle_labels[x])
+        ax1.axvline(params[11][(cycles[x])[1]],lw=1.5, color = times[x][3])
+    #    ax1.plot([0],[0], label=cycle_labels[x], color='white')
             
         ax1.annotate('', xy=(params[11][(cycles[x])[0]], arrow_height-0.1), 
             xytext=(params[11][(cycles[x])[1]], arrow_height-0.1), 
-            arrowprops=dict(connectionstyle="arc3", arrowstyle="-", color='b'))
+            arrowprops=dict(connectionstyle="arc3", arrowstyle="<->", color=times[x][3]))
             
         ax1.annotate(
-            cycle_labels[x][0],((params[11][cycles[x][0]
-                + 20]), 20))
+            cycle_labels[x][0],((params[11][cycles[x][0]]), arrow_height))#+ 20
                                      
     for y in range(len(params[12])):
         for x in range(len(cycles)):         
@@ -588,9 +576,7 @@ def use_readme():
 
         #Need to get a title, use polyfit for getting m, m_sigma, c and c_sigma
         #and use linregress for the r_value. Need also to get dilution/predicted
-        #concentration from file
-                    
-        
+        #concentration from file        
 
         dilution = []
         for x in range(len(cycles)):
@@ -634,8 +620,6 @@ def use_readme():
             fi.write('c = {}\n'.format(intercept))
             fi.write('r_value = {}\n'.format(r_value))
             fi.write('sigma_m = {}\n'.format(std_err))
-
-        
 
 window = Tk()
 select_param()
