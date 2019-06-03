@@ -214,11 +214,11 @@ def plot():
     if params[2].get() == "Time series":
         plot_time_series()
         if specdir[0].get() != '' and specdir[1].get() == '':
-            plot_spectroscopy('ohn2')
+            plot_spectroscopy('ohn2', params[1], params[3])
         if specdir[1].get() != '' and specdir[0].get() == '':
-            plot_spectroscopy('broad')
+            plot_spectroscopy('broad', params[1], params[3])
         if specdir[0].get() != '' and specdir[1].get() != '':
-            plot_spectroscopy('both')
+            plot_spectroscopy('both', params[1], params[3])
         
         plt.show()
 
@@ -228,7 +228,7 @@ def plot():
     elif params[2].get() == "Mass scan":
         plot_mass_scan()
 
-def plot_spectroscopy(param):
+def plot_spectroscopy(param, xoption, reloffset):
 
     if param == 'ohn2':
         folder_name = specdir[0].get() + '/'
@@ -254,7 +254,13 @@ def plot_spectroscopy(param):
                 for i in range(len(specline)):
                     if str(specline[i]) in line:
                         ydata[i].append(float(line.strip().split()[1]))
-                
+
+    if xoption == "Relative Time":          
+        tmp = []
+        for time in range(len(xdata)):
+            tmp.append(xdata[time].to_pydatetime())      
+        xdata = [(item-reloffset).total_seconds()/60.0 for item in tmp]
+
     if len(specline) == 1:
         ax2 = ax1.twinx()
         ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(specline[0])), color='r')
