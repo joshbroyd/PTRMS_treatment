@@ -228,7 +228,7 @@ def plot():
     elif params[2].get() == "Mass scan":
         plot_mass_scan()
 
-def plot_spectroscopy(param, xoption, reloffset):
+def plot_spectroscopy(param, xoption, reloffsetent):
 
     if param == 'ohn2':
         folder_name = specdir[0].get() + '/'
@@ -254,12 +254,16 @@ def plot_spectroscopy(param, xoption, reloffset):
                 for i in range(len(specline)):
                     if str(specline[i]) in line:
                         ydata[i].append(float(line.strip().split()[1]))
+    
+    
 
-    if xoption == "Relative Time":          
-        tmp = []
-        for time in range(len(xdata)):
-            tmp.append(xdata[time].to_pydatetime())      
-        xdata = [(item-reloffset).total_seconds()/60.0 for item in tmp]
+    if xoption.get() == "Relative Time":
+        reloffset = params[9] + ' ' + reloffsetent.get()
+        reloffset = datetime.datetime.strptime(reloffset.strip(),
+                                               '%Y-%m-%d %H:%M:%S')               
+        xdata = [(item-reloffset).total_seconds()/60.0 for item in xdata]
+
+    print(xoption.get(), reloffset)
 
     if len(specline) == 1:
         ax2 = ax1.twinx()
