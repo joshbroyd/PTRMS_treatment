@@ -17,7 +17,7 @@ from scipy.stats import linregress
 #0 yaxis format
 #1 xaxis format
 #2 Time series or mass scan
-#3 Absolute time when trel =0
+#3 Absolute time when trel = 0
 #4 README path
 #5 Excel file paths
 #6 Moving average duration
