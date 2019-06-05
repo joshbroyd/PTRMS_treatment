@@ -220,6 +220,9 @@ def plot():
         if specdir[0].get() != '' and specdir[1].get() != '':
             plot_spectroscopy('both', params[1], params[3])
         
+        leg = ax1.legend(ncol=3).get_frame() #
+        leg.set_alpha(0.8)
+        leg.set_edgecolor('white')
         plt.show()
 
         for tickbox in tickboxes:
@@ -237,7 +240,11 @@ def plot_spectroscopy(param, xoption, reloffsetent):
         folder_name = specdir[1].get() + '/'
         specline = convertparam(lines[1].get())
     elif param == 'both':
-        print("still to do")
+        folder_name1 = specdir[0].get() + '/'
+        specline1 = convertparam(lines[0].get())
+        folder_name2 = specdir[1].get() + '/'
+        specline2 = convertparam(lines[1].get())
+
 
     filenames = os.listdir(folder_name)
     filenames.sort()
@@ -269,6 +276,7 @@ def plot_spectroscopy(param, xoption, reloffsetent):
         ax2 = ax1.twinx()
         ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(specline[0])), color='r')
         ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(specline[0])),lw=2,color='r')
+        ax1.plot(xdata[0], ydata[0][0], label= "{}nm emission line".format(str(specline[0])),lw=2,color='r')
     
     elif len(specline) == 2:
         ax2 = ax1.twinx()
@@ -327,7 +335,7 @@ def plot_time_series():
                  linestyle=ls)
 
     title = date + ' experiment'
-    ax1.set(xlabel=xlabel, ylabel=ylabel, title = title)
+    ax1.set(xlabel=xlabel, ylabel=ylabel)#, title = title)
     if params[4].get() != '' or specdir != '':
         # DO NOT use append to append to params - the shape of params should be 
         # left alone
@@ -342,9 +350,9 @@ def plot_time_series():
     ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
     ax1.yaxis.set_minor_formatter(ScalarFormatter())
     ax1.yaxis.set_major_formatter(ScalarFormatter())
-    leg = ax1.legend(ncol=3).get_frame() #
-    leg.set_alpha(0.8)
-    leg.set_edgecolor('white')
+   # leg = ax1.legend(ncol=3).get_frame() #
+   # leg.set_alpha(0.8)
+   # leg.set_edgecolor('white')
     
     figManager = plt.get_current_fig_manager()
     figManager.window.showMaximized()
@@ -556,7 +564,7 @@ def use_readme():
     for x in range(len(cycles)):
         #can change this  len(cycles) to the labels you want to show
                  
-        arrow_height=sum(params[12][0])/len(params[12][0]) - x
+        arrow_height=sum(params[12][0])/len(params[12][0]) - x + 2
              
         ax1.axvline(params[11][(cycles[x])[0]],lw=1.5, color = times[x][3], label=cycle_labels[x])
         ax1.axvline(params[11][(cycles[x])[1]],lw=1.5, color = times[x][3])
