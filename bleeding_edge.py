@@ -47,24 +47,24 @@ if __name__ == "__main__":
 
 def select_param():
     
-    global params, specdir, lines
-    params = [[] for _ in range(9)]
+    global params, specdir, lines                    #Needs removing with changing to class
+    params = [[] for _ in range(9)]                  #Do not need this at all using a class
 
-    commands = [getdatapaths, getreadmepath, loaddata, plot, close]
+    commands = [getdatapaths, getreadmepath, loaddata, plot, close]   #Need to add in spectroscopy commands
     commandtext = ["Add Excel Files", "Add Project File" , "Load data", "Plot",
-        "Exit"] 
+        "Exit"]   #Need to add in spectroscopy text
     for i in range(len(commandtext)):
         Button(window, text=commandtext[i], command=commands[i]).grid(row=i, 
         sticky="NESW")
 
     Button(window, text="Add Broadband Spectra Folder", command=getbspecfolder).grid(row=0, 
-        column=4, sticky="NESW")
-    bspecdir = Entry(window)
-    bspecdir.grid(column=5, row=0)
+        column=4, sticky="NESW")  #This can be removed after consoldiation above
+    bspecdir = Entry(window)  #[1] Can be consolidated with params[paramsindex[i]] = Entry(window), which itself can be simplified after using a class
+    bspecdir.grid(column=5, row=0)  # [2] Can be consolidated with params[paramsindex[i]].grid(column=columnindex[i], row=rowindex[i])
     
-    blines = Entry(window)
-    blines.grid(row=1, column=5)
-    blines.insert("0", "777.25, 844.66")
+    blines = Entry(window) #see above [1]
+    blines.grid(row=1, column=5) #see above [2]
+    blines.insert("0", "777.25, 844.66") 
     Label(window, text="Broadband lines \n (O peak at 777.25nm and 844.66nm):").grid(row=1, column=4, sticky="NSEW")
     
     Button(window, text="Add OHN2 Spectra Folder", command=getospecfolder).grid(row=2, 
