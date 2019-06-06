@@ -289,7 +289,6 @@ def plot_mass_scan():
     y, ylabel, chosenchannels = get_ydata(app.params[5].get(), channels, 
         all_channels[0])
     print(ylabel, chosenchannels)
-        
     lengths = []
     paths = app.paths[0].get()
     for f in paths:
@@ -313,9 +312,7 @@ def plot_mass_scan():
                 
     ind = np.arange(len(chosenchannels))
     width = 2
-        
     _, ax = plt.subplots()
-        
     fccolours = itertools.cycle(['red', 'gray','green', 'blue', 'cyan',
         'magenta','lawngreen','darkorange','maroon','orchid'])
         
@@ -335,7 +332,6 @@ def plot_mass_scan():
     xlabels = [n[4:-2] for n in chosenchannels]
     ax.set_xticklabels(xlabels)
     ax.legend()
-
     plt.show()
 
 def plot_time_series():
@@ -437,8 +433,6 @@ def plot_spectroscopy(path, lines, date, ax):
                                                '%Y-%m-%d %H:%M:%S')               
         xdata = [(item-reloffset).total_seconds()/60.0 for item in xdata]
 
-  #  print(app.params[6].get(), reloffset)
-
     if len(lines) == 1:
         ax2 = ax.twinx()
         ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
@@ -453,7 +447,6 @@ def plot_spectroscopy(path, lines, date, ax):
         ax3.spines["right"].set_position(("axes", 1.1))
         ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color='g')
         ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color='g')
-
 
 def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
@@ -517,8 +510,6 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
        #     cycle = bisect.bisect_right(absolute_time, time)
        #     ax1.axvline(xdata[cycle],lw=1, color = 'r')
 
-    
-    
     for x in range(len(cycles)):
         #can change this  len(cycles) to the labels you want to show
                  
