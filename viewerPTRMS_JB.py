@@ -375,7 +375,7 @@ def plot_time_series():
         ax1.plot(xdata, ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
-    title = date + ' ' + app.params[4].get()
+    title = app.params[4].get() #date + ' ' + 
     ax1.set(xlabel=xlabel, ylabel=ylabel, title=title)
     if app.paths[1].get() != '':
         use_readme(date, absolute_time, xdata, ydata, ax1, chosenchannels)
@@ -412,18 +412,23 @@ def plot_spectroscopy(path, lines, date, ax):
 
     filenames = os.listdir(path)
     filenames.sort()
-    filenames = [path + '/' + f for f in filenames] 
+    filenames = [path + '/' + f for f in filenames]
+    lines = [l.strip() for l in lines.split(",")]
     xdata = []
     ydata = [[] for _ in range(len(lines))]
-    lines = convertparam(lines)
-
+    
     for f in filenames:        
         with open(f) as file:
             data = file.readlines()
             for line in data:
                 if "Date:" in line:
                     xdata.append(datetime.datetime.strptime(date + ' ' + line.strip().split()[4], "%Y-%m-%d %H:%M:%S"))
-                for i in range(len(lines)):
+
+    for i in range(len(lines)):
+        for f in filenames:
+            with open(f) as file:
+                data = file.readlines()
+                for line in data:
                     if str(lines[i]) in line:
                         ydata[i].append(float(line.strip().split()[1]))    
 
@@ -447,6 +452,19 @@ def plot_spectroscopy(path, lines, date, ax):
         ax3.spines["right"].set_position(("axes", 1.1))
         ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color='g')
         ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color='g')
+    
+    elif len(lines) == 3:
+        ax2 = ax.twinx()
+        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
+        ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color='r')
+        ax3 = ax.twinx()
+        ax3.spines["right"].set_position(("axes", 1.1))
+        ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color='g')
+        ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color='g')
+        ax4 = ax.twinx()
+        ax4.spines["right"].set_position(("axes", 1.2))
+        ax4.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[2])), color='b')
+        ax4.plot(xdata, ydata[2], ls=':', label= "{}nm peak".format(str(lines[2])),lw=2,color='b')
 
 def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
@@ -524,7 +542,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             arrowprops=dict(connectionstyle="arc3", arrowstyle="<->", color=times[x][3]))
             
         ax.annotate(
-            cycle_labels[x][0],((xdata[cycles[x][0]]), arrow_height))#+ 20
+            cycle_labels[x][0],((xdata[cycles[x][0]]), arrow_height))
                                      
     for y in range(len(ydata)):
         for x in range(len(cycles)):         
