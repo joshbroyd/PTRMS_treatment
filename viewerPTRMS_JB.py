@@ -1,7 +1,7 @@
 from tkinter import (Tk, Frame, Button, filedialog, Entry, IntVar, Checkbutton,
 Label, StringVar, OptionMenu)
 import matplotlib as mpl
-mpl.use('qt5agg')
+#mpl.use('qt5agg')
 from matplotlib.ticker import ScalarFormatter, FormatStrFormatter
 import sys, itertools, os, datetime, bisect, string
 from scipy.stats import linregress
@@ -13,15 +13,16 @@ import pandas as pd
 #Changes the font and fontsize of the graphs 
 if __name__ == "__main__":
 
-    fontsize = 20
-    params = {'backend':'qt5agg',
+    fontsize = 27
+    params = {'backend':'WXAgg',
             'text.latex.preamble':['\\usepackage{gensymb}'],
             'axes.labelsize':fontsize,
             'axes.titlesize':fontsize,
             'font.size':fontsize,
             'legend.fontsize':fontsize-5,
-            'xtick.labelsize':fontsize-5,
-            'ytick.labelsize':fontsize-5,
+            'xtick.labelsize':fontsize,
+            'ytick.labelsize':fontsize,
+            'axes.linewidth':2,
             'font.family':'serif'}
     mpl.rcParams.update(params)
 
@@ -505,18 +506,18 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             dilution = l.split(',')
             dilution = [m.strip() for m in dilution]
         for l in searchlines[indices[8]+1:indices[9]]:
-            event = l.split(',')
-            event = [m.strip() for m in event]
+   #         event = l.split(',')
+   #         event = [m.strip() for m in event]
             events.append(l)
             
-    ax.plot(absolute_time[0],[0],color='purple',label="N$_2$ temperature taken")
-    for x in range(len(events)):
-        datetime_object1 = datetime.datetime.strptime(
-            date + ' ' + events[x].strip(), '%Y-%m-%d %H:%M:%S')
-        cycle = bisect.bisect_right(absolute_time, datetime_object1)
-        eventcycles.append(cycle)
-    for x in range(len(eventcycles)):
-        ax.axvline(xdata[eventcycles[x]],lw=1.5, color = 'purple')
+  #  ax.plot(absolute_time[0],[0],color='purple',label="N$_2$ temperature taken")
+  #  for x in range(len(events)):
+  #      datetime_object1 = datetime.datetime.strptime(
+  #          date + ' ' + events[x].strip(), '%Y-%m-%d %H:%M:%S')
+  #      cycle = bisect.bisect_right(absolute_time, datetime_object1)
+  #      eventcycles.append(cycle)
+  #  for x in range(len(eventcycles)):
+  #      ax.axvline(xdata[eventcycles[x]],lw=1.5, color = 'purple')
 
     for x in range(len(times)):
         datetime_object1 = datetime.datetime.strptime(
