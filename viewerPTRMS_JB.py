@@ -403,7 +403,7 @@ def plot_time_series():
    # fig2.savefig('myimage2.svg', format='svg', dpi=1200)
    # fig2.savefig('myimage2.eps', format='eps', dpi=1200)
 
-    leg = ax1.legend(ncol=3).get_frame()
+    leg = ax1.legend(ncol=2).get_frame()
     leg.set_alpha(0.8)
     leg.set_edgecolor('white')
     plt.show()
@@ -443,28 +443,37 @@ def plot_spectroscopy(path, lines, date, ax):
         ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
         ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color='r')
         ax.plot(xdata[0], ydata[0][0], label= "{}nm emission line".format(str(lines[0])),lw=2,color='r')
+        if app.params[6].get() == "Absolute Time":
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     
     elif len(lines) == 2:
         ax2 = ax.twinx()
         ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
         ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color='r')
         ax3 = ax.twinx()
-        ax3.spines["right"].set_position(("axes", 1.1))
+        ax3.spines["right"].set_position(("axes", 1.2))
         ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color='g')
         ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color='g')
+        if app.params[6].get() == "Absolute Time":
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+            ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     
     elif len(lines) == 3:
         ax2 = ax.twinx()
         ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
         ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color='r')
         ax3 = ax.twinx()
-        ax3.spines["right"].set_position(("axes", 1.1))
+        ax3.spines["right"].set_position(("axes", 1.2))
         ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color='g')
         ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color='g')
         ax4 = ax.twinx()
-        ax4.spines["right"].set_position(("axes", 1.2))
+        ax4.spines["right"].set_position(("axes", 1.3))
         ax4.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[2])), color='b')
         ax4.plot(xdata, ydata[2], ls=':', label= "{}nm peak".format(str(lines[2])),lw=2,color='b')
+        if app.params[6].get() == "Absolute Time":
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+            ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+            ax4.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
 def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
@@ -490,24 +499,24 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             time = l.split(',')
             time = [m.strip() for m in time]
             times.append(time)
-        for l in searchlines[indices[4]+1:indices[5]]:
-            ax.set(title = date + ' ' + l)      
+      #  for l in searchlines[indices[4]+1:indices[5]]:
+      #      ax.set(title = date + ' ' + l)      
         for l in searchlines[indices[6]+1:indices[7]]:
             dilution = l.split(',')
             dilution = [m.strip() for m in dilution]
         for l in searchlines[indices[8]+1:indices[9]]:
-          #  event = l.split(',')
-          #  event = [m.strip() for m in event]
+            event = l.split(',')
+            event = [m.strip() for m in event]
             events.append(l)
             
-  #  ax1.plot((params[11])[0],[0],color='purple',label="N$_2$ temperature taken")
-  #  for x in range(len(events)):
-  #      datetime_object1 = datetime.datetime.strptime(
-  #          params[9] + ' ' + events[x].strip(), '%Y-%m-%d %H:%M:%S')
-  #      cycle = bisect.bisect_right(params[10], datetime_object1)
-  #      eventcycles.append(cycle)
-  #   for x in range(len(eventcycles)):
-  #      ax1.axvline(params[11][eventcycles[x]],lw=1.5, color = 'purple')
+    ax.plot(absolute_time[0],[0],color='purple',label="N$_2$ temperature taken")
+    for x in range(len(events)):
+        datetime_object1 = datetime.datetime.strptime(
+            date + ' ' + events[x].strip(), '%Y-%m-%d %H:%M:%S')
+        cycle = bisect.bisect_right(absolute_time, datetime_object1)
+        eventcycles.append(cycle)
+    for x in range(len(eventcycles)):
+        ax.axvline(xdata[eventcycles[x]],lw=1.5, color = 'purple')
 
     for x in range(len(times)):
         datetime_object1 = datetime.datetime.strptime(
@@ -530,19 +539,20 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
     for x in range(len(cycles)):
         #can change this  len(cycles) to the labels you want to show
-                 
-        arrow_height=sum(ydata[0])/len(ydata[0]) - x + 2
+        #arrow_height needs to be a function of the maximum value in the ydata
+
+        arrow_height=max(ydata[0])/(len(cycles) + 2) * (x+1)
              
         ax.axvline(xdata[(cycles[x])[0]],lw=1.5, color = times[x][3], label=cycle_labels[x])
         ax.axvline(xdata[(cycles[x])[1]],lw=1.5, color = times[x][3])
     #    ax1.plot([0],[0], label=cycle_labels[x], color='white')
             
-        ax.annotate('', xy=(xdata[(cycles[x])[0]], arrow_height-0.1), 
-            xytext=(xdata[(cycles[x])[1]], arrow_height-0.1), 
+        ax.annotate('', xy=(xdata[(cycles[x])[0]], arrow_height), 
+            xytext=(xdata[(cycles[x])[1]], arrow_height), 
             arrowprops=dict(connectionstyle="arc3", arrowstyle="<->", color=times[x][3]))
             
         ax.annotate(
-            cycle_labels[x][0],((xdata[cycles[x][0]]), arrow_height))
+            cycle_labels[x][0],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + 0.1*max(ydata[0])/(len(cycles) + 2)))
                                      
     for y in range(len(ydata)):
         for x in range(len(cycles)):         
