@@ -77,7 +77,7 @@ class Application(Frame):
             self.params[i].grid(column=c[i],row=r[i])
             self.params[i].insert("0", defaults[i])
         
-        menutext = ["y-axis format", "x-axis format",""]
+        menutext = ["Quadrupole channel \n format", "x-axis format",""]
         defaultoption = ["Concentration", "Absolute Time", "Time series"]
         options = [["Concentration", "Raw signal intensities"], 
                    ["Cycle number", "Absolute Time", "Relative Time"],
@@ -101,7 +101,7 @@ class Application(Frame):
     def getdatapath(self):
         path = list(filedialog.askopenfilenames(
             title="Choose data files",
-            initialdir="/home/jgb509/Documents/CRM/Data"))
+            initialdir="/home/jgb509/Documents/Measurements/PTR-MS/Data"))
         self.paths[0].insert("0", path)
 
     def getreadmepath(self):
@@ -125,55 +125,54 @@ class Application(Frame):
     def loaddata(self):
         all_channels = get_channels()
         self.tickboxes = []
-        self.channels = [[] for _ in range(len(all_channels))]
-        #self.channels[0] = user chosen m/z channels
-        # "[1] = Recorded instrument settings
-        # "[2] = Measured instrument conditions
-        for n in range(1, 3):
-            for m in range(len(all_channels[n])):
-                entry = IntVar()
-                tickbox = Checkbutton(self, text=all_channels[n][m], 
-                                      variable=entry)
-                tickbox.grid(row=5+m, column=n-1, sticky="NESW")
-                self.channels[n].append(entry)
-                self.tickboxes.append(tickbox)
+        self.channels = []
+        # first 23 entries are instrumental conditions.
+        
+        for m in range(23):
+            x = m//14
+            y = m + 5 - (m//14 * 14)
+            entry = IntVar()
+            tickbox = Checkbutton(self, text=all_channels[m], 
+                                    variable=entry)
+            tickbox.grid(row=y, column=x, sticky="NESW")
+            self.channels.append(entry)
+            self.tickboxes.append(tickbox)
         
         if self.params[7].get() == "Time series":
-            for n in range(len(all_channels[0])):
-                x = n//14 + 2
-                y = n + 6 - (n//14 * 14)           
+            for n in range(23, 23+len(all_channels[23:])):
+                x = (n-23)//14 + 2
+                y = (n-23) + 5 - ((n-23)//14 * 14)           
                 entry = IntVar()
-                tickbox = Checkbutton(self, text=all_channels[0][n], 
+                tickbox = Checkbutton(self, text=all_channels[n], 
                                       variable=entry)
                 tickbox.grid(row=y, column=x, sticky="NESW")
-                self.channels[0].append(entry)
+                self.channels.append(entry)
                 self.tickboxes.append(tickbox)
         
         elif self.params[7].get() == "Mass scan":
-            mz_channels = [n.split() for n in all_channels[0]]
+            mz_channels = [n.split() for n in all_channels[23:]]
             available_mz = ("m/z " + str(mz_channels[0][1]) + " to " 
                 + str(mz_channels[-1][1]) + " are available")
             usr_inst = ("Input individual comma separated values\n"
                         "or a range, hypen separated.")
             Label(self, text=available_mz).grid(row=5, column=2, sticky="NESW")
             Label(self, text=usr_inst).grid(row=7, column=2, sticky="NESW")
-            self.channels[0] = Entry(self)   
-            self.channels[0].insert("0", str(mz_channels[0][1]) + "-" 
+            self.channels.append(Entry(self))   
+            self.channels[23].insert("0", str(mz_channels[0][1]) + "-" 
                 + str(mz_channels[-1][1]))
-            self.channels[0].grid(row=6, column=2)
+            self.channels[23].grid(row=6, column=2)
 
 def get_channels():
 #Accepts a list of filenames and returns the full list of channel names (keys) 
 #from the first excel file that's read in
 
     all_channels = []
-    sheetnames = ["Raw signal intensities", "Instrument",
-                  "Reaction conditions"]
+    sheetnames = ["Instrument","Reaction conditions","Raw signal intensities"]
     path = app.paths[0].get().split()          
     for sheetname in sheetnames:
         data = pd.read_excel(path[0], sheet_name=sheetname)
         channels = [str(x) for x in list(data.keys())]
-        all_channels.append(channels)
+        all_channels.extend(channels)
     return all_channels
 
 # Converts the user input to parameter list
@@ -231,34 +230,59 @@ def get_xdata(xoption, reloffset):
                    
     return x, xlabel
 
-def get_ydata(yoption, channels, channel_keys):
-#Args are corresponding to raw counts or concentration and the list of channel 
-#keys. Returns a list of lists of ydata from the corresponding channels and 
-#yoption and the yaxis label. 
+def get_ydata(allchannels, channel_keys):
+#Args are the list of channels & channel keys. Returns a list of lists of 
+# ydata from the corresponding channels and the labels. 
 
-    chosenchannels = []
-    for n in range(len(channels)):
-        if channels[n] == 1:
-            chosenchannels.append(channel_keys[n])
- 
-    y = [[] for _ in range(len(chosenchannels))]      
-    for f in app.paths[0].get().split():
-        data = pd.read_excel(f, sheet_name=yoption)
-        for i in range(len(chosenchannels)):
-            tmp = np.asarray(data[chosenchannels[i]])
-            tmp = [0 if item == '#NV' else item for item in tmp]
-            y[i].extend(tmp)
+#Need to know which sheetname to use for which channels. Needs to be adaptive
+#so it will still plot if a mixture of sheetnames is chosen.
+
+#Need to have a list of channel_keys that the user wants to plot. Needs to be organised 
+#so that if just quadrupole channels want to be plotted the list of lists should look 
+#like: [[],[],[usrchosen1, usrchosen2]] etc
+
+    ydata = []
+    linelabels = []
+    chosenkeychannels = [[] for _ in range(3)]
+
+    InstrumentChannels = channel_keys[:14]
+    ReacCondChannels = channel_keys[14:23]
+    QuadChannels = channel_keys[23:]
+    keychannels = [InstrumentChannels, ReacCondChannels, QuadChannels]
+
+    InstrumentChannels = allchannels[:14]
+    ReacCondChannels = allchannels[14:23]
+    QuadChannels = allchannels[23:]
+    chosenchannels = [InstrumentChannels, ReacCondChannels, QuadChannels]
     
-    if yoption == "Raw signal intensities":
+    for m in range(3):
+        for n in range(len(chosenchannels[m])):
+            if chosenchannels[m][n] == 1:
+                print(keychannels[m][n])
+                chosenkeychannels[m].append(keychannels[m][n])
+                linelabels.append(keychannels[m][n])
+
+    sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
+    for n in range(len(sheetnames)):
+        for i in range(len(chosenkeychannels[n])):
+            tmp2 = []
+            for f in app.paths[0].get().split():
+                data = pd.read_excel(f, sheet_name=sheetnames[n])
+                tmp1 = np.asarray(data[chosenkeychannels[n][i]])
+                tmp1 = [0 if item == '#NV' else item for item in tmp1]
+                tmp2.extend(tmp1)
+            ydata.append(tmp2)
+
+    if app.params[5].get() == "Raw signal intensities":
             ylabel = "Raw signal intensity (cps)"
            
-    elif yoption == "Concentration":
+    elif app.params[5].get() == "Concentration":
         ylabel = "Concentration (ppb)"
             
-    elif yoption == "Instrument" or yoption == "Reaction conditions" :
+    elif app.params[5].get() == "Instrument" or app.params[5].get() == "Reaction conditions" :
         ylabel = "ARB"
-        
-    return y, ylabel, chosenchannels
+    
+    return ydata, ylabel, linelabels
 
 def smooth(y, box_pts):
 #Smooth function to return the moving average of length box_pts from list y.     
@@ -287,8 +311,7 @@ def plot_mass_scan():
     for n in n_channels:
         channels[all_channels[0].index(n)] = 1
                
-    y, ylabel, chosenchannels = get_ydata(app.params[5].get(), channels, 
-        all_channels[0])
+    y, ylabel, chosenchannels = get_ydata(channels, all_channels)
     print(ylabel, chosenchannels)
     lengths = []
     paths = app.paths[0].get()
@@ -350,10 +373,9 @@ def plot_time_series():
     linestyles = itertools.cycle(['-', '--', ':', '-.'])
         
     all_channels = get_channels()
-    channels = [i.get() for i in app.channels[0]]
+    channels = [i.get() for i in app.channels]
 
-    ydata, ylabel, chosenchannels = get_ydata(app.params[5].get(), channels, 
-        all_channels[0])
+    ydata, ylabel, chosenchannels = get_ydata(channels, all_channels)    
     absolute_time = get_xdata("Absolute Time", app.params[0].get())[0]
     date = datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d')
     reloffset = date + ' ' + app.params[0].get()
