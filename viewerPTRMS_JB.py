@@ -10,19 +10,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-#Changes the font and fontsize of the graphs 
+#Changes the font and fontsize of the graphs
+dir_path = os.path.dirname(os.path.realpath(__file__))
 if __name__ == "__main__":
 
-    fontsize = 27
-    params = {'backend':'WXAgg',
+    fontsize = 20
+    params = {'backend':'TkAgg',
             'text.latex.preamble':['\\usepackage{gensymb}'],
+            'savefig.directory': dir_path,
+            'savefig.format': 'eps',
             'axes.labelsize':fontsize,
             'axes.titlesize':fontsize,
             'font.size':fontsize,
             'legend.fontsize':fontsize-5,
             'xtick.labelsize':fontsize,
+            'xtick.direction':'in',
+            'xtick.major.size':5,
+            'xtick.major.width':2,
             'ytick.labelsize':fontsize,
+            'ytick.direction': 'in',
+            'ytick.major.size':5,
+            'ytick.major.width':2,
+            'lines.markersize':10,
+            'lines.linewidth':3,
             'axes.linewidth':2,
+            'axes.grid':True,
             'font.family':'serif'}
     mpl.rcParams.update(params)
 
@@ -69,7 +81,7 @@ class Application(Frame):
                      "Broadband lines \n (O peak at 777.25nm and 844.66nm):",
                      ("OHN2 lines (OH peak at 308.92nm, \nN2 peaks at " 
                       "336.30nm, 357.56nm):"), "Graph title:"]
-        defaults = ['', 120.0, "777.25, 844.66", "308.92, 336.30, 357.56", 
+        defaults = ["hh:mm:ss", 120.0, "777.25, 844.66", "308.92, 336.30, 357.56", 
                     "experiment"]
         for i in range(len(labeltext)):
             Label(self, text=labeltext[i]).grid(column=c[i]-1, row=r[i])
@@ -197,12 +209,18 @@ def convertparam(param):
 def get_xdata(xoption, reloffset):
 #Returns xdata list and xlabel depending on xoption.
     
-    if reloffset != " " and xoption == "Relative Time":
-        reloffset = datetime.datetime.strptime(reloffset.strip(),
+    if xoption == "Relative Time":
+        if reloffset != "hh:mm:ss":
+            print("reloffset is not NULL")
+            reloffset = datetime.datetime.strptime(reloffset.strip(),
                                                '%Y-%m-%d %H:%M:%S')
-    
-    if reloffset == " " and xoption == "Relative Time":
-        sys.exit("Need to choose a starting time for relative time")
+            print(reloffset)
+        elif reloffset == "hh:mm:ss":
+            print("reloffset is NULL")
+            f = app.paths[0].get().split()[0]
+            data = pd.read_excel(f, sheet_name="Time   Cycle")
+            reloffset = data["Absolute Time"][0].to_pydatetime()
+            print(reloffset)   
         
     x = []
     for f in app.paths[0].get().split():
@@ -375,7 +393,8 @@ def plot_time_series():
     all_channels = get_channels()
     channels = [i.get() for i in app.channels]
 
-    ydata, ylabel, chosenchannels = get_ydata(channels, all_channels)    
+    ydata, ylabel, chosenchannels = get_ydata(channels, all_channels)
+      
     absolute_time = get_xdata("Absolute Time", app.params[0].get())[0]
     date = datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d')
     reloffset = date + ' ' + app.params[0].get()
@@ -394,7 +413,7 @@ def plot_time_series():
         series_label = (chosenchannels[index] + ',\n ' + str(app.params[1].get())
         + ' second moving average')
         ysmooth = smooth(ydata[index], cycles_perxmins)
-        ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc)
+        ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc, alpha=0.2)
         ax1.plot(xdata, ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
