@@ -190,6 +190,7 @@ def get_channels():
 # Converts the user input to parameter list
 def convertparam(param):
     
+    print(param)
     if '-' in param:
         i = param.index('-')
         MIN = float(param[:i])
@@ -323,16 +324,21 @@ def plot_mass_scan():
     print("plotting mass scan")
                 
     all_channels = get_channels()
-    channels = np.zeros(len(all_channels[0]), dtype=int)
-    n_channels = convertparam(app.channels[0].get())      
+    print(all_channels)
+    channels = np.zeros(len(all_channels), dtype=int)
+    n_channels = convertparam(app.channels[23].get())
+
     n_channels = ["m/z " + str(i) for i in n_channels]
+    print(n_channels)
     for n in n_channels:
-        channels[all_channels[0].index(n)] = 1
+        channels[all_channels.index(n)] = 1
                
     y, ylabel, chosenchannels = get_ydata(channels, all_channels)
     print(ylabel, chosenchannels)
     lengths = []
-    paths = app.paths[0].get()
+
+    paths = app.paths[0].get().split()
+    print(paths)
     for f in paths:
         data = np.asarray(pd.read_excel(f, sheet_name="Time   Cycle")
             ["Cycle number"])
