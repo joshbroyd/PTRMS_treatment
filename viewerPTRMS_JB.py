@@ -14,28 +14,33 @@ import pandas as pd
 dir_path = os.path.dirname(os.path.realpath(__file__))
 if __name__ == "__main__":
 
-    fontsize = 20
-    params = {'backend':'TkAgg',
+    fontsize = 25
+    params = {'backend':'QT5Agg',
             'text.latex.preamble':['\\usepackage{gensymb}'],
-            'savefig.directory': dir_path,
-            'savefig.format': 'eps',
+            'text.usetex': True,
             'axes.labelsize':fontsize,
             'axes.titlesize':fontsize,
             'font.size':fontsize,
             'legend.fontsize':fontsize-5,
             'xtick.labelsize':fontsize,
-            'xtick.direction':'in',
-            'xtick.major.size':5,
-            'xtick.major.width':2,
             'ytick.labelsize':fontsize,
+            'xtick.direction':'in',
+            'xtick.major.size':10,
+            'xtick.major.width':2,
+            'xtick.minor.size':5,
+            'xtick.minor.width':2,
             'ytick.direction': 'in',
-            'ytick.major.size':5,
+            'ytick.major.size':10,
             'ytick.major.width':2,
+            'ytick.minor.size':5,
+            'ytick.minor.width':2,
             'lines.markersize':10,
             'lines.linewidth':3,
             'axes.linewidth':2,
             'axes.grid':True,
-            'font.family':'serif'}
+            'figure.figsize': [16, 9],
+            'font.family':'serif',
+            'font.serif':'Times'}
     mpl.rcParams.update(params)
 
 #plt.rc('text', usetex=True)
@@ -423,7 +428,7 @@ def plot_time_series():
         ax1.plot(xdata, ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
-    title = app.params[4].get() #date + ' ' + 
+    title = date + ' ' + app.params[4].get() #
     ax1.set(xlabel=xlabel, ylabel=ylabel, title=title)
     if app.paths[1].get() != '':
         use_readme(date, absolute_time, xdata, ydata, ax1, chosenchannels)
