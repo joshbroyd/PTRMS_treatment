@@ -606,19 +606,26 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             
         ax.annotate(
             cycle_labels[x][0],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + 0.1*max(ydata[0])/(len(cycles) + 2)))
-                                     
-    for y in range(len(ydata)):
-        for x in range(len(cycles)):         
-            mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
-            stddev = np.std(ydata[y][cycles[x][0]:cycles[x][1]])
-            n = len(ydata[y][cycles[x][0]:cycles[x][1]])
-            stderr = stddev/np.sqrt(n)                
-            print(string.ascii_uppercase[x] + '.\nmean: ' + str(mean) 
-                + '\nstd. dev.: ' + str(stddev) + '\nn: ' + str(n) 
-                + '\nstd. err.: ' + str(stderr) + '\n')
-            y_calibdata.append(mean)
-            y_errcalibdata.append(stderr)
-            stddevs.append(stddev)
+
+    filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
+    with open(filename, 'w') as fi:
+        fi.write("Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean")
+        for y in range(len(ydata)):
+            for x in range(len(cycles)):         
+                mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
+                stddev = np.std(ydata[y][cycles[x][0]:cycles[x][1]])
+                n = len(ydata[y][cycles[x][0]:cycles[x][1]])
+                stderr = stddev/np.sqrt(n)                
+                print(string.ascii_uppercase[x] + '.\nmean: ' + str(mean) 
+                    + '\nstd. dev.: ' + str(stddev) + '\nn: ' + str(n) 
+                    + '\nstd. err.: ' + str(stderr) + '\n')
+                fi.write(string.ascii_uppercase[x] + ' ' + str(mean) 
+                    + ' ' + str(stddev) + ' ' + str(n) 
+                    + ' ' + str(stderr) + '\n')
+                y_calibdata.append(mean)
+                y_errcalibdata.append(stderr)
+                stddevs.append(stddev)    
+   
     
     if app.params[8].get() == 1:
 
@@ -657,7 +664,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         slope, intercept, r_value, _, std_err = linregress(dilution, y_calibdata)
 
         filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
-        with open(filename, 'w') as fi:
+        with open(filename, 'a') as fi:
             fi.write(chosenchannels[0])
             fi.write('\ny = mx + c\n')
             fi.write('numpy polyfit\n')
