@@ -10,6 +10,8 @@ from scipy.stats import linregress
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.sparse.linalg import spsolve
+import scipy.sparse as sparse
 import pandas as pd
 
 #Changes the font and fontsize of the graphs
@@ -82,6 +84,21 @@ class Application(Frame):
         # "[6] = x-axis format
         # "[7] = time series or mass scan
         # "[8] = calibration
+
+        # "[9] = lambda parameter for baseline correction
+        # "[10] = p parameter for baseline correction
+        self.baselineparams = [[] for _ in range(2)]
+        labels = ["lambda", "p"]
+        defaults = [1e6, 0.00005]
+        r, c = [0, 1], [7, 7]
+        for i in range(len(labels)):
+            Label(self, text=labels[i]).grid(column=c[i]-1, row=r[i])
+            self.baselineparams[i] = Entry(self)
+            self.baselineparams[i].grid(column=c[i],row=r[i])
+            self.baselineparams[i].insert("0", defaults[i])
+
+
+
         r, c = [3, 4, 1, 3, 4], [3, 3, 5, 5, 5]
         labeltext = ["Absolute time (hh:mm:ss) \nwhen trel=0",
                      "Moving average\nduration (seconds)",
@@ -418,7 +435,9 @@ def plot_time_series():
                           for element in rel_time]))                          
     print("There are " + str(cycles_perxmins) + " cycles per " 
           + str(app.params[1].get()) + " seconds.")
+    
 
+    print(app.params)
     for index in range(len(ydata)):
         mc = next(markercolours)
         lc = next(linecolours)
@@ -426,8 +445,11 @@ def plot_time_series():
         series_label = (chosenchannels[index] + ',\n ' + str(app.params[1].get())
         + ' second moving average')
         ysmooth = smooth(ydata[index], cycles_perxmins)
-        ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc, alpha=0.2)
-        ax1.plot(xdata, ysmooth, lw=2, color=lc, label=series_label,
+        bs_corrected = baseline_als(ydata[index][100:], float(app.baselineparams[0].get()), float(app.baselineparams[1].get()))
+        ax1.plot(xdata[100:], bs_corrected, ls='--', lw=2, color=lc, label=series_label + 
+        '\nbaseline corrected')
+        ax1.plot(xdata[100:], ydata[index][100:], 'o',  ms=2, color=mc, alpha=0.2)
+        ax1.plot(xdata[100:], ysmooth[100:], lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
     title = date + ' ' + app.params[4].get() #
@@ -529,6 +551,17 @@ def plot_spectroscopy(path, lines, date, ax):
             ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             ax4.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+
+def baseline_als(y, lam, p, niter=10):
+  L = len(y)
+  D = sparse.csc_matrix(np.diff(np.eye(L), 2))
+  w = np.ones(L)
+  for i in range(niter):
+    W = sparse.spdiags(w, 0, L, L)
+    Z = W + lam * D.dot(D.transpose())
+    z = spsolve(Z, w*y)
+    w = p * (y > z) + (1-p) * (y < z)
+  return z
 
 def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
