@@ -1,3 +1,5 @@
+#!/usr/bin python3
+
 from tkinter import (Tk, Frame, Button, filedialog, Entry, IntVar, Checkbutton,
 Label, StringVar, OptionMenu)
 import matplotlib as mpl
@@ -377,7 +379,7 @@ def plot_mass_scan():
         ax.bar(ind + ind*(len(paths)*width) + width*i, means[i], width, 
             color=fc, alpha=.5, align='edge',
             error_kw=dict(ecolor='k', lw=1.5, capsize=3, capthick=1.5), 
-            yerr=stderr[i], label=paths[i])
+            yerr=stderr[i], label="mass scan {}".format(i))
         
     ax.set_ylabel(ylabel)
     ax.set_xlabel("Mass/charge ratio")
