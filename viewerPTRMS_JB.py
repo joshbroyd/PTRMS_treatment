@@ -89,7 +89,7 @@ class Application(Frame):
         # "[10] = p parameter for baseline correction
         self.baselineparams = [[] for _ in range(2)]
         labels = ["lambda", "p"]
-        defaults = [1e6, 0.00005]
+        defaults = [1e8, 0.01]
         r, c = [0, 1], [7, 7]
         for i in range(len(labels)):
             Label(self, text=labels[i]).grid(column=c[i]-1, row=r[i])
@@ -330,7 +330,7 @@ def get_ydata(allchannels, channel_keys):
 def smooth(y, box_pts):
 #Smooth function to return the moving average of length box_pts from list y.     
     box = np.ones(box_pts)/box_pts
-    y_smooth = np.convolve(y, box, mode='same')
+    y_smooth = np.convolve(y, box, mode='valid')
     return y_smooth
 
 def plot():
@@ -436,20 +436,25 @@ def plot_time_series():
     print("There are " + str(cycles_perxmins) + " cycles per " 
           + str(app.params[1].get()) + " seconds.")
     
-
-    print(app.params)
     for index in range(len(ydata)):
         mc = next(markercolours)
         lc = next(linecolours)
         ls = next(linestyles)
         series_label = (chosenchannels[index] + ',\n ' + str(app.params[1].get())
         + ' second moving average')
+
         ysmooth = smooth(ydata[index], cycles_perxmins)
-        bs_corrected = baseline_als(ydata[index][100:], float(app.baselineparams[0].get()), float(app.baselineparams[1].get()))
-        ax1.plot(xdata[100:], bs_corrected, ls='--', lw=2, color=lc, label=series_label + 
+
+      #  ydata[index] = ydata[index] - min(ysmooth)
+      #  ysmooth = ysmooth - min(ysmooth)
+         #
+        bs_corrected = baseline_als(ydata[index], float(app.baselineparams[0].get()), float(app.baselineparams[1].get()))
+        ax1.plot(xdata, bs_corrected, ls='--', lw=2, color=lc, label=series_label + 
         '\nbaseline corrected')
-        ax1.plot(xdata[100:], ydata[index][100:], 'o',  ms=2, color=mc, alpha=0.2)
-        ax1.plot(xdata[100:], ysmooth[100:], lw=2, color=lc, label=series_label,
+       # bs_corrected2 = ydata[index][100:] - 
+        #define when the baseline was taken and use that data with the baseline correction
+        ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc, alpha=0.2)
+        ax1.plot(xdata[-1+cycles_perxmins//2:-cycles_perxmins//2], ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
     title = date + ' ' + app.params[4].get() #
@@ -644,7 +649,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
     filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
     with open(filename, 'w') as fi:
-        fi.write("Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean")
+        fi.write("Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean\n")
         for y in range(len(ydata)):
             for x in range(len(cycles)):         
                 mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
@@ -654,9 +659,9 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
                 print(string.ascii_uppercase[x] + '.\nmean: ' + str(mean) 
                     + '\nstd. dev.: ' + str(stddev) + '\nn: ' + str(n) 
                     + '\nstd. err.: ' + str(stderr) + '\n')
-                fi.write(string.ascii_uppercase[x] + ' ' + str(mean) 
-                    + ' ' + str(stddev) + ' ' + str(n) 
-                    + ' ' + str(stderr) + '\n')
+                fi.write(string.ascii_uppercase[x] + ', ' + str(mean) 
+                    + ', ' + str(stddev) + ', ' + str(n) 
+                    + ', ' + str(stderr) + '\n')
                 y_calibdata.append(mean)
                 y_errcalibdata.append(stderr)
                 stddevs.append(stddev)    
@@ -671,7 +676,25 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         dilution = []
         for x in range(len(cycles)):
             dilution.append(float(times[x][2]))
-            
+        
+        filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
+        with open(filename, 'w') as fi:
+            fi.write("# Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean\n")
+            for y in range(len(ydata)):
+                for x in range(len(cycles)):         
+                    mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
+                    stddev = np.std(ydata[y][cycles[x][0]:cycles[x][1]])
+                    n = len(ydata[y][cycles[x][0]:cycles[x][1]])
+                    stderr = stddev/np.sqrt(n)                
+                    print(string.ascii_uppercase[x] + '.\nmean: ' + str(mean) 
+                        + '\nstd. dev.: ' + str(stddev) + '\nn: ' + str(n) 
+                        + '\nstd. err.: ' + str(stderr) + '\n')
+                    fi.write(string.ascii_uppercase[x] + ', ' 
+                        + str(dilution[x]) + ', ' + str(mean) 
+                        + ', ' + str(stddev) + ', ' + str(n) 
+                        + ', ' + str(stderr) + '\n')
+
+
         #dilution = 
         #[0, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]
         #[1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
@@ -700,16 +723,16 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
         filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'a') as fi:
-            fi.write(chosenchannels[0])
-            fi.write('\ny = mx + c\n')
-            fi.write('numpy polyfit\n')
-            fi.write('m = {}, sigma_m = {}\n'.format(f[0],np.sqrt(V[0][0])))
-            fi.write('c = {}, sigma_c = {}\n'.format(f[1],np.sqrt(V[1][1])))
-            fi.write('scipy linregress\n')
-            fi.write('m = {}\n'.format(slope))
-            fi.write('c = {}\n'.format(intercept))
-            fi.write('r_value = {}\n'.format(r_value))
-            fi.write('sigma_m = {}\n'.format(std_err))
+            fi.write('# ' + chosenchannels[0] + '\n')
+            fi.write('# y = mx + c\n')
+            fi.write('# numpy polyfit\n')
+            fi.write('# m = {}, sigma_m = {}\n'.format(f[0],np.sqrt(V[0][0])))
+            fi.write('# c = {}, sigma_c = {}\n'.format(f[1],np.sqrt(V[1][1])))
+            fi.write('# scipy linregress\n')
+            fi.write('# m = {}\n'.format(slope))
+            fi.write('# c = {}\n'.format(intercept))
+            fi.write('# r_value = {}\n'.format(r_value))
+            fi.write('# sigma_m = {}\n'.format(std_err))
 
 root = Tk()
 app = Application(master=root)
