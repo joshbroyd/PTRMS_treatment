@@ -84,9 +84,9 @@ class Application(Frame):
         # "[6] = x-axis format
         # "[7] = time series or mass scan
         # "[8] = calibration
-
         # "[9] = lambda parameter for baseline correction
         # "[10] = p parameter for baseline correction
+        # "[11] = plot and use baseline correction
         self.baselineparams = [[] for _ in range(2)]
         labels = ["lambda", "p"]
         defaults = [1e8, 0.01]
@@ -96,8 +96,6 @@ class Application(Frame):
             self.baselineparams[i] = Entry(self)
             self.baselineparams[i].grid(column=c[i],row=r[i])
             self.baselineparams[i].insert("0", defaults[i])
-
-
 
         r, c = [3, 4, 1, 3, 4], [3, 3, 5, 5, 5]
         labeltext = ["Absolute time (hh:mm:ss) \nwhen trel=0",
@@ -127,6 +125,9 @@ class Application(Frame):
         self.params[8] = IntVar()
         Checkbutton(self, text="Calibration", variable=self.params[8]).grid(
             column=2, row=2, sticky="NSEW")
+        self.usebaseline = IntVar()
+        Checkbutton(self, text="Use & plot baseline correction", variable=self.usebaseline).grid(
+            column=7, row=2, sticky="NSEW")
         Button(self, text="Load data", command=self.loaddata).grid(
             row=2, column=0, sticky="NSEW")
         Button(self, text="Plot", command=plot).grid(
@@ -362,6 +363,7 @@ def plot_mass_scan():
     lengths = []
 
     paths = app.paths[0].get().split()
+    paths.sort()
     print(paths)
     for f in paths:
         data = np.asarray(pd.read_excel(f, sheet_name="Time   Cycle")
@@ -389,14 +391,20 @@ def plot_mass_scan():
         'magenta','lawngreen','darkorange','maroon','orchid'])
         
     for i in range(len(paths)):
-        paths[i] = os.path.basename(paths[i])[:-5]
+        paths[i] = os.path.basename(paths[i])[1:-5]
+        test = list(paths[i])
+        for z in range(len(test)):
+            if test[z] == '_':
+                test[z] = ' '
+        paths[i] = ''.join(test)
+
         
     for i in range(len(paths)):
         fc = next(fccolours)
         ax.bar(ind + ind*(len(paths)*width) + width*i, means[i], width, 
             color=fc, alpha=.5, align='edge',
             error_kw=dict(ecolor='k', lw=1.5, capsize=3, capthick=1.5), 
-            yerr=stderr[i], label="mass scan {}".format(i))
+            yerr=stderr[i], label=paths[i])#"mass scan {}".format(i)
         
     ax.set_ylabel(ylabel)
     ax.set_xlabel("Mass/charge ratio")
@@ -444,13 +452,20 @@ def plot_time_series():
         + ' second moving average')
 
         ysmooth = smooth(ydata[index], cycles_perxmins)
-
+        #Find the difference between the baseline correction and the minimum value of the baseline correction to apply to the 
+        #data.
       #  ydata[index] = ydata[index] - min(ysmooth)
       #  ysmooth = ysmooth - min(ysmooth)
-         #
-        bs_corrected = baseline_als(ydata[index], float(app.baselineparams[0].get()), float(app.baselineparams[1].get()))
-        ax1.plot(xdata, bs_corrected, ls='--', lw=2, color=lc, label=series_label + 
-        '\nbaseline corrected')
+        
+        if app.usebaseline.get() == 1:
+            bs_corrected = baseline_als(ydata[index], float(app.baselineparams[0].get()), float(app.baselineparams[1].get()))
+            correction = bs_corrected - min(bs_corrected)
+            data = ydata[index] - correction
+            ax1.plot(xdata, data, ls=':', lw=2, color=lc, label=series_label + 
+            '\nbaseline corrected')
+
+            ax1.plot(xdata, bs_corrected, ls='--', lw=2, color=lc, label=series_label + 
+            '\nbaseline')
        # bs_corrected2 = ydata[index][100:] - 
         #define when the baseline was taken and use that data with the baseline correction
         ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc, alpha=0.2)
