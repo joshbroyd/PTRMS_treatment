@@ -2,10 +2,9 @@
 
 from tkinter import (Tk, Frame, Button, filedialog, Entry, IntVar, Checkbutton,
 Label, StringVar, OptionMenu)
-import matplotlib as mpl
 #mpl.use('qt5agg')
 from matplotlib.ticker import ScalarFormatter, FormatStrFormatter
-import sys, itertools, os, datetime, bisect, string
+import sys, itertools, datetime, bisect, string
 from scipy.stats import linregress
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -15,6 +14,8 @@ import scipy.sparse as sparse
 import pandas as pd
 
 #Changes the font and fontsize of the graphs
+import os
+import matplotlib as mpl
 dir_path = os.path.dirname(os.path.realpath(__file__))
 if __name__ == "__main__":
 
