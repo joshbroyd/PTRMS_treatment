@@ -99,7 +99,6 @@ class Application(Frame):
             self.baselineparams[i].grid(column=c[i],row=r[i])
             self.baselineparams[i].insert("0", defaults[i])
 
-
         Label(self, text="Annotation height").grid(column=6, row=3, sticky="NSEW")
         self.arrow_heightent = Entry(self)
         self.arrow_heightent.grid(column=7, row=3, sticky="NSEW")
