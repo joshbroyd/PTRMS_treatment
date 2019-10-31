@@ -85,9 +85,10 @@ class Application(Frame):
         # "[6] = x-axis format
         # "[7] = time series or mass scan
         # "[8] = calibration
-        # "[9] = lambda parameter for baseline correction
-        # "[10] = p parameter for baseline correction
-        # "[11] = plot and use baseline correction
+        #baselineparams
+        # "[0] = lambda parameter for baseline correction
+        # "[1] = p parameter for baseline correction
+        # plot and use baseline correction
         self.baselineparams = [[] for _ in range(2)]
         labels = ["lambda", "p"]
         defaults = [1e8, 0.01]
@@ -98,12 +99,18 @@ class Application(Frame):
             self.baselineparams[i].grid(column=c[i],row=r[i])
             self.baselineparams[i].insert("0", defaults[i])
 
+
+        Label(self, text="Annotation height").grid(column=6, row=3, sticky="NSEW")
+        self.arrow_heightent = Entry(self)
+        self.arrow_heightent.grid(column=7, row=3, sticky="NSEW")
+        self.arrow_heightent.insert("0", "100")
+
         r, c = [3, 4, 1, 3, 4], [3, 3, 5, 5, 5]
         labeltext = ["Absolute time (hh:mm:ss) \nwhen trel=0",
                      "Moving average\nduration (seconds)",
                      "Broadband lines \n (O peak at 777.25nm and 844.66nm):",
                      ("OHN2 lines (OH peak at 308.92nm, \nN2 peaks at " 
-                      "336.30nm, 357.56nm):"), "Graph title:"]
+                      "336.30nm, 357.56nm):"), "Graph 1 title:"]
         defaults = ["hh:mm:ss", 120.0, "777.25, 844.66", "308.92, 336.30, 357.56", 
                     "experiment"]
         for i in range(len(labeltext)):
@@ -145,19 +152,19 @@ class Application(Frame):
     def getreadmepath(self):
         path = filedialog.askopenfilename(
             title="Choose readme file",
-            initialdir="/home/jgb509/Documents/CRM/Data")
+            initialdir="/home/jgb509/Documents/Measurements/PTR-MS/Data")
         self.paths[1].insert("0", path)
 
     def getbroadpath(self):
         path = filedialog.askdirectory(
             title='Choose broadband spectroscopy folder', 
-            initialdir="/home/jgb509/Documents/CRM/Spectroscopy")
+            initialdir="/home/jgb509/Documents/Measurements/Spectroscopy")
         self.paths[2].insert("0", path)    
 
     def getOHN2path(self):
         path = filedialog.askdirectory(
             title='Choose OHN2 spectroscopy folder', 
-            initialdir="/home/jgb509/Documents/CRM/Spectroscopy")
+            initialdir="/home/jgb509/Documents/Measurements/Spectroscopy")
         self.paths[3].insert("0", path)
 
     def loaddata(self):
@@ -502,7 +509,7 @@ def plot_time_series():
    # fig2.savefig('myimage2.eps', format='eps', dpi=1200)
 
     leg = ax1.legend(ncol=2).get_frame()
-    leg.set_alpha(0.8)
+    leg.set_alpha(1)
     leg.set_edgecolor('white')
     plt.show()
 
@@ -647,18 +654,18 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
        #     ax1.axvline(xdata[cycle],lw=1, color = 'r')
 
     for x in range(len(cycles)):
-        #can change this  len(cycles) to the labels you want to show
-        #arrow_height needs to be a function of the maximum value in the ydata
+        #arrow_height should be user chosen, using the GUI
 
-        arrow_height=max(ydata[0])/(len(cycles) + 2) * (x+1)
-             
-        ax.axvline(xdata[(cycles[x])[0]],lw=1.5, color = times[x][3], label=cycle_labels[x])
+        arrow_height=float(app.arrow_heightent.get())  #max(ydata[0])/(len(cycles) + 2) * (x+1)
+        
+
+        ax.axvline(xdata[(cycles[x])[0]],lw=1.5, color = times[x][3])#, label=cycle_labels[x])
         ax.axvline(xdata[(cycles[x])[1]],lw=1.5, color = times[x][3])
-    #    ax1.plot([0],[0], label=cycle_labels[x], color='white')
+       # ax.plot(xdata[0],[0], label=cycle_labels[x], color='white')
             
         ax.annotate('', xy=(xdata[(cycles[x])[0]], arrow_height), 
             xytext=(xdata[(cycles[x])[1]], arrow_height), 
-            arrowprops=dict(connectionstyle="arc3", arrowstyle="<->", color=times[x][3]))
+            arrowprops=dict(connectionstyle="arc3", arrowstyle="-", color=times[x][3]))
             
         ax.annotate(
             cycle_labels[x][0],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + 0.1*max(ydata[0])/(len(cycles) + 2)))
@@ -695,7 +702,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         
         filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'w') as fi:
-            fi.write("# Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean\n")
+            fi.write("# Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean (calculated using numpy)\n")
             for y in range(len(ydata)):
                 for x in range(len(cycles)):         
                     mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
@@ -710,7 +717,6 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
                         + ', ' + str(stddev) + ', ' + str(n) 
                         + ', ' + str(stderr) + '\n')
 
-
         #dilution = 
         #[0, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]
         #[1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
@@ -720,12 +726,44 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         ax2.errorbar(dilution, y_calibdata, yerr=y_errcalibdata,
                         fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
                         color='k', capthick=1.5, label=chosenchannels[0])
+        
+        
+        columns = 3
+        if len(dilution) % 3 == 0:
+            rows = len(dilution)//3
+        else:
+            rows = 1 + len(dilution)//3        
+        
+        fig2, axs = plt.subplots(rows,columns)
+        co = 0
+        for n in range(rows):
+            for m in range(columns):
+                _, bins, _ = axs[n][m].hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=20, density=True,label=cycle_labels[co][0])
+                y = ((1 / (np.sqrt(2 * np.pi) * stddevs[co])) *  np.exp(-0.5 * (1 / stddevs[co] * (bins - y_calibdata[co]))**2))
+                axs[n][m].plot(bins, y, '--')
+                leg2 = axs[n][m].legend().get_frame()
+                leg2.set_alpha(1)
+                leg2.set_edgecolor("white")
+                co += 1
+        
+        fig2.text(0.5, 0.03, "Measured concentration (ppb)", ha='center', va='center')
+        fig2.text(0.01, 0.5, "Probability density", ha='center', va='center', rotation='vertical')
+        fig2.tight_layout()
+
+        for n in range(len(dilution)):
+            ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+20))
 
         f, V  = np.polyfit(dilution, y_calibdata, 1, cov=True, w=stddevs)
         
         title = date + ' characterisation'
         ax2.plot(dilution, np.polyval(np.poly1d(f), dilution), 
             'r-', lw=1.5, label='Linear fit')
+       
+        slope, intercept, r_value, _, std_err = linregress(dilution, y_calibdata)
+        
+        #Linear regression does not take into account the standard deviation of each point.
+       # ax2.plot(dilution, np.polyval([slope, intercept], dilution),
+       #     'b--', lw=1.5, label='scipy linear regression')
 
         ax2.tick_params(which='both',direction='in',top=True, right=True)
         ax2.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
@@ -735,8 +773,6 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         leg.set_alpha(1)
         leg.set_edgecolor('white')
 
-        slope, intercept, r_value, _, std_err = linregress(dilution, y_calibdata)
-
         filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'a') as fi:
             fi.write('# ' + chosenchannels[0] + '\n')
@@ -744,6 +780,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             fi.write('# numpy polyfit\n')
             fi.write('# m = {}, sigma_m = {}\n'.format(f[0],np.sqrt(V[0][0])))
             fi.write('# c = {}, sigma_c = {}\n'.format(f[1],np.sqrt(V[1][1])))
+            fi.write('# scipy linregress does not take standard deviation of each point into account.')
             fi.write('# scipy linregress\n')
             fi.write('# m = {}\n'.format(slope))
             fi.write('# c = {}\n'.format(intercept))
