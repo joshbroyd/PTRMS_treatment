@@ -727,7 +727,6 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
                         fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
                         color='k', capthick=1.5, label=chosenchannels[0])
         
-        
         columns = 3
         if len(dilution) % 3 == 0:
             rows = len(dilution)//3
