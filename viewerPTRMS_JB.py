@@ -424,7 +424,7 @@ def plot_mass_scan():
 def plot_time_series():
     print("plotting time series")
 
-    _, ax1 = plt.subplots(figsize=(20,10))
+    fig1, ax1 = plt.subplots(figsize=(20,10))
     if app.params[6].get() == "Absolute Time":
         print("setting xaxis format to absolute time")
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))                  
@@ -508,8 +508,9 @@ def plot_time_series():
    # fig2.savefig('myimage2.eps', format='eps', dpi=1200)
 
     leg = ax1.legend(ncol=2).get_frame()
-    leg.set_alpha(1)
-    leg.set_edgecolor('white')
+    leg.set_alpha(0)
+    leg.set_edgecolor('None')
+  #  fig1.tight_layout()
     plt.show()
 
 def plot_spectroscopy(path, lines, date, ax):
@@ -600,7 +601,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
     y_calibdata = []
     y_errcalibdata = []
     stddevs = []
-    fig2, ax2 = plt.subplots(figsize=(15,15))
+    
     
     with open(app.paths[1].get()) as file:
         searchlines = file.readlines()
@@ -721,7 +722,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         #[1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
         #[0, 1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] for benzene
         #[0, 5e-3, 0.01, 0.015, 0.02, 0.025, 0.03] # correct for diethyl ether
-
+        fig2, ax2 = plt.subplots(figsize=(15,15))
         ax2.errorbar(dilution, y_calibdata, yerr=y_errcalibdata,
                         fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
                         color='k', capthick=1.5, label=chosenchannels[0])
@@ -732,22 +733,27 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             rows = len(dilution)//3
         else:
             rows = 1 + len(dilution)//3        
-        
-        fig2, axs = plt.subplots(rows,columns)
+        fig3, axs = plt.subplots(rows,columns)
         co = 0
         for n in range(rows):
             for m in range(columns):
                 _, bins, _ = axs[n][m].hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=20, density=True,label=cycle_labels[co][0])
                 y = ((1 / (np.sqrt(2 * np.pi) * stddevs[co])) *  np.exp(-0.5 * (1 / stddevs[co] * (bins - y_calibdata[co]))**2))
                 axs[n][m].plot(bins, y, '--')
+                axs[n][m].axvline(y_calibdata[co], color='k', label=r"$\bar{x}$"+r"$_{0}$".format(cycle_labels[co][0]))
+                axs[n][m].axvline(y_calibdata[co] + stddevs[co], color='r', label=r"$\sigma_{}$".format(cycle_labels[co][0]))
+                axs[n][m].axvline(y_calibdata[co] - stddevs[co], color='r')
+                axs[n][m].yaxis.set_major_formatter(FormatStrFormatter('%.0e'))
+                axs[n][m].locator_params(nbins=5, axis='x')
+                axs[n][m].tick_params(axis='y', which='both', labelleft=False)
                 leg2 = axs[n][m].legend().get_frame()
-                leg2.set_alpha(1)
-                leg2.set_edgecolor("white")
+                leg2.set_alpha(0)
+                leg2.set_edgecolor("None")
                 co += 1
         
-        fig2.text(0.5, 0.03, "Measured concentration (ppb)", ha='center', va='center')
-        fig2.text(0.01, 0.5, "Probability density", ha='center', va='center', rotation='vertical')
-        fig2.tight_layout()
+        fig3.text(0.5, 0.05, "Measured concentration (ppb)", ha='center', va='center')
+        fig3.text(0.1, 0.5, "Probability density", ha='center', va='center', rotation='vertical')
+       # fig3.tight_layout()
 
         for n in range(len(dilution)):
             ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+20))
@@ -769,8 +775,9 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         ax2.set(xlabel='Dilution factor', 
             ylabel = 'Measured\nconcentration (ppb)', title=title)        
         leg = ax2.legend().get_frame()
-        leg.set_alpha(1)
-        leg.set_edgecolor('white')
+        leg.set_alpha(0)
+        leg.set_edgecolor('None')
+      #  fig2.tight_layout()
 
         filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'a') as fi:
