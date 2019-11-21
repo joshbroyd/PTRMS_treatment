@@ -749,13 +749,13 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
                 leg2.set_alpha(0)
                 leg2.set_edgecolor("None")
                 co += 1
-        
+                        
         fig3.text(0.5, 0.05, "Measured concentration (ppb)", ha='center', va='center')
         fig3.text(0.1, 0.5, "Probability density", ha='center', va='center', rotation='vertical')
        # fig3.tight_layout()
 
         for n in range(len(dilution)):
-            ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+20))
+            ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+0.5))
 
         f, V  = np.polyfit(dilution, y_calibdata, 1, cov=True, w=stddevs)
         
