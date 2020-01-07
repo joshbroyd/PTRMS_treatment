@@ -745,7 +745,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         cols = 3
         rows = len(dilution)//cols + 1
         fig3, axs = plt.subplots(rows, cols, constrained_layout=True)
-        title3 = date + "_"
+        title = date + "_"
         fig3.canvas.set_window_title(title)
         axs[rows//2, 0].set_ylabel("Probability density")
         axs[rows-1, 0].set_xlabel("Measured concentration (ppb)")
