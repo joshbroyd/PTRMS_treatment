@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.sparse.linalg import spsolve
 import scipy.sparse as sparse
+from pandas.plotting import register_matplotlib_converters
+register_matplotlib_converters()
 import pandas as pd
 
 #Changes the font and fontsize of the graphs
@@ -146,6 +148,8 @@ class Application(Frame):
         path = list(filedialog.askopenfilenames(
             title="Choose data files",
             initialdir="/home/jgb509/Documents/Measurements/PTR-MS/Data"))
+        mpl.rcParams["savefig.directory"] = os.path.dirname(os.path.abspath(path[0]))
+        mpl.rcParams["savefig.format"] = "eps"
         self.paths[0].insert("0", path)
 
     def getreadmepath(self):
@@ -424,7 +428,7 @@ def plot_mass_scan():
 def plot_time_series():
     print("plotting time series")
 
-    fig1, ax1 = plt.subplots(figsize=(20,10))
+    fig1, ax1 = plt.subplots(figsize=(20,10), constrained_layout=True)
     if app.params[6].get() == "Absolute Time":
         print("setting xaxis format to absolute time")
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))                  
@@ -479,8 +483,10 @@ def plot_time_series():
         ax1.plot(xdata[-1+cycles_perxmins//2:-cycles_perxmins//2], ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
-    title = date + ' ' + app.params[4].get() #
-    ax1.set(xlabel=xlabel, ylabel=ylabel, title=title)
+    title = date + '_' + app.params[4].get()
+    fig1.canvas.set_window_title(title)
+
+    ax1.set(xlabel=xlabel, ylabel=ylabel)#, title=title)
     if app.paths[1].get() != '':
         use_readme(date, absolute_time, xdata, ydata, ax1, chosenchannels)
     
@@ -590,6 +596,13 @@ def baseline_als(y, lam, p, niter=10):
     z = spsolve(Z, w*y)
     w = p * (y > z) + (1-p) * (y < z)
   return z
+
+def trim_axs(axs, N):
+    """little helper to massage the axs list to have correct length..."""
+    axs = axs.flat
+    for ax in axs[N:]:
+        ax.remove()
+    return axs[:N]
 
 def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
@@ -722,37 +735,36 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         #[1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
         #[0, 1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] for benzene
         #[0, 5e-3, 0.01, 0.015, 0.02, 0.025, 0.03] # correct for diethyl ether
-        fig2, ax2 = plt.subplots(figsize=(15,15))
+        fig2, ax2 = plt.subplots(figsize=(15,15), constrained_layout=True)
+        title = date + "_calibration"
+        fig2.canvas.set_window_title(title)
         ax2.errorbar(dilution, y_calibdata, yerr=y_errcalibdata,
                         fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
                         color='k', capthick=1.5, label=chosenchannels[0])
         
-        columns = 3
-        if len(dilution) % 3 == 0:
-            rows = len(dilution)//3
-        else:
-            rows = 1 + len(dilution)//3        
-        fig3, axs = plt.subplots(rows,columns)
-        co = 0
-        for n in range(rows):
-            for m in range(columns):
-                _, bins, _ = axs[n][m].hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=20, density=True,label=cycle_labels[co][0])
-                y = ((1 / (np.sqrt(2 * np.pi) * stddevs[co])) *  np.exp(-0.5 * (1 / stddevs[co] * (bins - y_calibdata[co]))**2))
-                axs[n][m].plot(bins, y, '--')
-                axs[n][m].axvline(y_calibdata[co], color='k', label=r"$\bar{x}$"+r"$_{0}$".format(cycle_labels[co][0]))
-                axs[n][m].axvline(y_calibdata[co] + stddevs[co], color='r', label=r"$\sigma_{}$".format(cycle_labels[co][0]))
-                axs[n][m].axvline(y_calibdata[co] - stddevs[co], color='r')
-                axs[n][m].yaxis.set_major_formatter(FormatStrFormatter('%.0e'))
-                axs[n][m].locator_params(nbins=5, axis='x')
-                axs[n][m].tick_params(axis='y', which='both', labelleft=False)
-                leg2 = axs[n][m].legend().get_frame()
-                leg2.set_alpha(0)
-                leg2.set_edgecolor("None")
-                co += 1
-                        
-        fig3.text(0.5, 0.05, "Measured concentration (ppb)", ha='center', va='center')
-        fig3.text(0.1, 0.5, "Probability density", ha='center', va='center', rotation='vertical')
-       # fig3.tight_layout()
+        cols = 3
+        rows = len(dilution)//cols + 1
+        fig3, axs = plt.subplots(rows, cols, constrained_layout=True)
+        title3 = date + "_"
+        fig3.canvas.set_window_title(title)
+        axs[rows//2, 0].set_ylabel("Probability density")
+        axs[rows-1, 0].set_xlabel("Measured concentration (ppb)")
+        axs = trim_axs(axs, len(dilution))
+        
+        cos = range(len(dilution))
+        for ax, co in zip(axs, cos):
+            _, bins, _ = ax.hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=20, density=True,label=cycle_labels[co][0])
+            y = ((1 / (np.sqrt(2 * np.pi) * stddevs[co])) *  np.exp(-0.5 * (1 / stddevs[co] * (bins - y_calibdata[co]))**2))
+            ax.plot(bins, y, '--')
+            ax.axvline(y_calibdata[co], color='k', label=r"$\bar{x}$"+r"$_{0}$".format(cycle_labels[co][0]))
+            ax.axvline(y_calibdata[co] + stddevs[co], color='r', label=r"$\sigma_{}$".format(cycle_labels[co][0]))
+            ax.axvline(y_calibdata[co] - stddevs[co], color='r')
+            ax.yaxis.set_major_formatter(FormatStrFormatter('%.0e'))
+            ax.locator_params(nbins=5, axis='x')
+            ax.tick_params(axis='y', which='both', labelleft=False)
+            leg2 = ax.legend().get_frame()
+            leg2.set_alpha(0)
+            leg2.set_edgecolor("None")
 
         for n in range(len(dilution)):
             ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+0.5))
