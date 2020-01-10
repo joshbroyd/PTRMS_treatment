@@ -599,7 +599,7 @@ def baseline_als(y, lam, p, niter=10):
 
 def trim_axs(axs, N):
     """little helper to massage the axs list to have correct length..."""
-    axs = axs.flat
+   # axs = axs.flat
     for ax in axs[N:]:
         ax.remove()
     return axs[:N]
@@ -615,7 +615,6 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
     y_errcalibdata = []
     stddevs = []
     
-    
     with open(app.paths[1].get()) as file:
         searchlines = file.readlines()
         for i, line in enumerate(searchlines):
@@ -630,13 +629,13 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             times.append(time)
       #  for l in searchlines[indices[4]+1:indices[5]]:
       #      ax.set(title = date + ' ' + l)      
-        for l in searchlines[indices[6]+1:indices[7]]:
-            dilution = l.split(',')
-            dilution = [m.strip() for m in dilution]
-        for l in searchlines[indices[8]+1:indices[9]]:
+      #  for l in searchlines[indices[6]+1:indices[7]]:
+      #      dilution = l.split(',')
+      #      dilution = [m.strip() for m in dilution]
+      #  for l in searchlines[indices[8]+1:indices[9]]:
    #         event = l.split(',')
    #         event = [m.strip() for m in event]
-            events.append(l)
+      #      events.append(l)
             
   #  ax.plot(absolute_time[0],[0],color='purple',label="N$_2$ temperature taken")
   #  for x in range(len(events)):
@@ -744,16 +743,36 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         
         cols = 3
         rows = len(dilution)//cols + 1
-        fig3, axs = plt.subplots(rows, cols, constrained_layout=True)
-        title = date + "_"
+        fig3 = plt.figure()
+        ax = fig3.add_subplot(111) 
+        ax.spines['top'].set_color('none')
+        ax.spines['bottom'].set_color('none')
+        ax.spines['left'].set_color('none')
+        ax.spines['right'].set_color('none')
+        ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+        ax.grid(False)
+        co = 1
+        axs = []
+        for c in range(cols):
+            for r in range(rows):
+                c = c + 1
+                r = r + 1
+                axs.append(fig3.add_subplot(cols, rows, co))
+                co += 1
+
+
+     #   fig3, axs = plt.subplots(rows, cols, constrained_layout=True)
+        title = date + "_probability_densities"
         fig3.canvas.set_window_title(title)
-        axs[rows//2, 0].set_ylabel("Probability density")
-        axs[rows-1, 0].set_xlabel("Measured concentration (ppb)")
+     #   axs[rows//2, 0].set_ylabel("Probability density")
+     #   axs[rows-1, 0].set_xlabel("Measured concentration (ppb)")
+        ax.set_xlabel("Measured concentration (ppb)")
+        ax.set_ylabel("Probability density")
         axs = trim_axs(axs, len(dilution))
         
         cos = range(len(dilution))
         for ax, co in zip(axs, cos):
-            _, bins, _ = ax.hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=20, density=True,label=cycle_labels[co][0])
+            _, bins, _ = ax.hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=30, density=True)#,label=cycle_labels[co][0])
             y = ((1 / (np.sqrt(2 * np.pi) * stddevs[co])) *  np.exp(-0.5 * (1 / stddevs[co] * (bins - y_calibdata[co]))**2))
             ax.plot(bins, y, '--')
             ax.axvline(y_calibdata[co], color='k', label=r"$\bar{x}$"+r"$_{0}$".format(cycle_labels[co][0]))
@@ -784,11 +803,11 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         ax2.tick_params(which='both',direction='in',top=True, right=True)
         ax2.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
         ax2.set(xlabel='Dilution factor', 
-            ylabel = 'Measured\nconcentration (ppb)', title=title)        
+            ylabel = 'Measured\nconcentration (ppb)')#, title=title)        
         leg = ax2.legend().get_frame()
         leg.set_alpha(0)
         leg.set_edgecolor('None')
-      #  fig2.tight_layout()
+        fig3.tight_layout()
 
         filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'a') as fi:
