@@ -148,7 +148,7 @@ class Application(Frame):
         path = list(filedialog.askopenfilenames(
             title="Choose data files",
             initialdir="/home/jgb509/Documents/Measurements/PTR-MS/Data"))
-        mpl.rcParams["savefig.directory"] = os.path.dirname(os.path.abspath(path[0]))
+        mpl.rcParams["savefig.directory"] = os.path.dirname(os.path.abspath(path[0]))#
         mpl.rcParams["savefig.format"] = "eps"
         self.paths[0].insert("0", path)
 
@@ -428,7 +428,7 @@ def plot_mass_scan():
 def plot_time_series():
     print("plotting time series")
 
-    fig1, ax1 = plt.subplots(figsize=(20,10), constrained_layout=True)
+    fig1, ax1 = plt.subplots(figsize=(20,10))#, constrained_layout=True)
     if app.params[6].get() == "Absolute Time":
         print("setting xaxis format to absolute time")
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))                  
@@ -483,7 +483,8 @@ def plot_time_series():
         ax1.plot(xdata[-1+cycles_perxmins//2:-cycles_perxmins//2], ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
-    title = date + '_' + app.params[4].get()
+    title = date + '_' + app.params[4].get() + "_" + chosenchannels[0].replace("/", "") 
+    title.replace(" ","_")
     fig1.canvas.set_window_title(title)
 
     ax1.set(xlabel=xlabel, ylabel=ylabel)#, title=title)
@@ -682,7 +683,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         ax.annotate(
             cycle_labels[x][0],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + 0.1*max(ydata[0])/(len(cycles) + 2)))
 
-    filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
+    filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
     with open(filename, 'w') as fi:
         fi.write("Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean\n")
         for y in range(len(ydata)):
@@ -712,7 +713,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         for x in range(len(cycles)):
             dilution.append(float(times[x][2]))
         
-        filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
+        filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'w') as fi:
             fi.write("# Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean (calculated using numpy)\n")
             for y in range(len(ydata)):
@@ -734,8 +735,9 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         #[1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] # changed here
         #[0, 1.25e-3, 1.5e-3, 1.75e-3, 2e-3, 2.25e-3, 2.5e-3] for benzene
         #[0, 5e-3, 0.01, 0.015, 0.02, 0.025, 0.03] # correct for diethyl ether
-        fig2, ax2 = plt.subplots(figsize=(15,15), constrained_layout=True)
-        title = date + "_calibration"
+        fig2, ax2 = plt.subplots(figsize=(15,15))#, constrained_layout=True)
+        title = date + "_calibration" + "_" + chosenchannels[0].replace("/", "") 
+        title.replace(" ","_")
         fig2.canvas.set_window_title(title)
         ax2.errorbar(dilution, y_calibdata, yerr=y_errcalibdata,
                         fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
@@ -762,7 +764,8 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
 
      #   fig3, axs = plt.subplots(rows, cols, constrained_layout=True)
-        title = date + "_probability_densities"
+        title = date + "_probability_densities" + "_" + chosenchannels[0].replace("/", "") 
+        title.replace(" ","_")
         fig3.canvas.set_window_title(title)
      #   axs[rows//2, 0].set_ylabel("Probability density")
      #   axs[rows-1, 0].set_xlabel("Measured concentration (ppb)")
@@ -809,7 +812,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         leg.set_edgecolor('None')
         fig3.tight_layout()
 
-        filename = date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
+        filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'a') as fi:
             fi.write('# ' + chosenchannels[0] + '\n')
             fi.write('# y = mx + c\n')
