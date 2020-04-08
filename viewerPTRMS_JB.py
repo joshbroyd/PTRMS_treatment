@@ -7,6 +7,7 @@ from matplotlib.ticker import ScalarFormatter, FormatStrFormatter
 import sys, itertools, datetime, bisect, string
 from scipy.stats import linregress
 import matplotlib.dates as mdates
+import matplotlib.ticker as ticker
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.sparse.linalg import spsolve
@@ -429,14 +430,12 @@ def plot_time_series():
     print("plotting time series")
 
     fig1, ax1 = plt.subplots(figsize=(20,10))#, constrained_layout=True)
-    if app.params[6].get() == "Absolute Time":
-        print("setting xaxis format to absolute time")
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))                  
+    ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
                 
     markercolours = itertools.cycle(['k','lightgreen','r','magenta',
                                      'midnightblue','darkorange'])
-    linecolours = itertools.cycle(['grey','g','maroon','orchid', 'skyblue',
-                                   'orange'])
+    linecolours = itertools.cycle(['maroon','orchid', 'skyblue',
+                                   'orange', 'grey','g'])
     linestyles = itertools.cycle(['-', '--', ':', '-.'])
         
     all_channels = get_channels()
@@ -479,13 +478,9 @@ def plot_time_series():
             '\nbaseline')
        # bs_corrected2 = ydata[index][100:] - 
         #define when the baseline was taken and use that data with the baseline correction
-        ax1.plot(xdata, ydata[index], 'o',  ms=2, color=mc, alpha=0.2)
+        ax1.plot(xdata, ydata[index], '-s',  ms=2, color=mc, alpha=0.2, lw=1)
         ax1.plot(xdata[-1+cycles_perxmins//2:-cycles_perxmins//2], ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
-
-    title = date + '_' + app.params[4].get() + "_" + chosenchannels[0].replace("/", "") 
-    title.replace(" ","_")
-    fig1.canvas.set_window_title(title)
 
     ax1.set(xlabel=xlabel, ylabel=ylabel)#, title=title)
     if app.paths[1].get() != '':
@@ -497,7 +492,7 @@ def plot_time_series():
     if app.paths[3].get() != '':
         plot_spectroscopy(app.paths[3].get(), app.params[3].get(), date, ax1)
     
-    ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
+    
     ax1.yaxis.set_minor_formatter(ScalarFormatter())
     ax1.yaxis.set_major_formatter(ScalarFormatter())
    # leg = ax1.legend(ncol=3).get_frame() #
@@ -513,6 +508,56 @@ def plot_time_series():
    # fig1.savefig('myimage.eps', format='eps', dpi=1200)
    # fig2.savefig('myimage2.svg', format='svg', dpi=1200)
    # fig2.savefig('myimage2.eps', format='eps', dpi=1200)
+
+    def ConctoDen(x):
+#Accepts a concentration in ppb and returns the species density in cm^-3
+        p = 101325
+        k = 1.380649e-23
+        T = 293.15
+        n = x*1e-9*1e-6*p/(k*T)
+        return n
+    def DentoConc(n):
+        #Accepts a species density in cm^-3 and returns the concentration in ppb
+        p = 101325
+        k = 1.380649e-23
+        T = 293.15
+        x = n*1e9*1e6*k*T/p
+        return x
+
+    
+    title = date + '_' + app.params[4].get() + "_" + chosenchannels[0].replace("/", "") 
+    title.replace(" ","_")
+    fig1.canvas.set_window_title(title)
+    
+    
+    secax = ax1.twinx()
+    secax.plot(xdata, [ConctoDen(n) for n in ydata[0]], color=None, alpha=0)
+    ax1.figure.canvas.draw()
+
+   # offset = secax.yaxis.get_major_formatter().get_offset()
+   # secax.set(ylabel="Species density (" + offset + "cm$^{-3}$)")
+   # print(offset, type(offset))
+   # scale_x = float("1e"+offset[11:13])
+   # print(scale_x)
+   # ticks_x = ticker.FuncFormatter(lambda x, pos: '{:.2f}'.format(x/scale_x))
+   # secax.yaxis.set_major_formatter(ticks_x)
+    secax.grid(b=None)
+
+    secax.set(ylabel="Species density (cm$^{-3}$)")
+
+   # secax = ax1.secondary_yaxis('right', functions=(ConctoDen,DentoConc))
+   # ax1.figure.canvas.draw()
+   # offset = secax.yaxis.get_major_formatter().get_offset()
+   # secax.set(ylabel="Species density (" + offset + "cm$^{-3}$)")
+   # secax.yaxis.offsetText.set_visible(False)
+
+   # scale_x = float("1e"+offset[11:13])
+   # ticks_x = ticker.FuncFormatter(lambda x, pos: '{0:.3f}'.format(x/scale_x))
+   # secax.yaxis.set_major_formatter(ticks_x)
+    
+    if app.params[6].get() == "Absolute Time":
+        print("setting xaxis format to absolute time")
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
     leg = ax1.legend(ncol=2).get_frame()
     leg.set_alpha(0)
