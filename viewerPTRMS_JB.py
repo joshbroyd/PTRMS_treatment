@@ -45,7 +45,7 @@ if __name__ == "__main__":
             'lines.markersize':10,
             'lines.linewidth':3,
             'axes.linewidth':2,
-            'axes.grid':True,
+            'axes.grid':False,
             'figure.figsize': [16, 9],
             'font.family':'serif',
             'font.serif':'Times'}
@@ -102,10 +102,15 @@ class Application(Frame):
             self.baselineparams[i].grid(column=c[i],row=r[i])
             self.baselineparams[i].insert("0", defaults[i])
 
-        Label(self, text="Annotation height").grid(column=6, row=3, sticky="NSEW")
+        Label(self, text="Starting annotation height").grid(column=6, row=3, sticky="NSEW")
         self.arrow_heightent = Entry(self)
         self.arrow_heightent.grid(column=7, row=3, sticky="NSEW")
         self.arrow_heightent.insert("0", "100")
+
+        Label(self, text="Annotation height offset").grid(column=6, row=4, sticky="NSEW")
+        self.arrow_heightoffsetent = Entry(self)
+        self.arrow_heightoffsetent.grid(column=7, row=4, sticky="NSEW")
+        self.arrow_heightoffsetent.insert("0", "3")
 
         r, c = [3, 4, 1, 3, 4], [3, 3, 5, 5, 5]
         labeltext = ["Absolute time (hh:mm:ss) \nwhen trel=0",
@@ -123,7 +128,7 @@ class Application(Frame):
         
         menutext = ["Quadrupole channel \n format", "x-axis format",""]
         defaultoption = ["Concentration", "Absolute Time", "Time series"]
-        options = [["Concentration", "Raw signal intensities"], 
+        options = [["Concentration", "Raw signal intensities", "Normalised signal intensity"], 
                    ["Cycle number", "Absolute Time", "Relative Time"],
                    ["Time series", "Mass scan"]]
         for i in range(len(menutext)):
@@ -172,7 +177,7 @@ class Application(Frame):
         self.paths[3].insert("0", path)
 
     def loaddata(self):
-        all_channels = get_channels()
+        all_channels, transmission = get_channels()
         self.tickboxes = []
         self.channels = []
         # first 23 entries are instrumental conditions.
@@ -216,13 +221,37 @@ def get_channels():
 #from the first excel file that's read in
 
     all_channels = []
-    sheetnames = ["Instrument","Reaction conditions","Raw signal intensities"]
-    path = app.paths[0].get().split()          
+    sheetnames = ["Instrument","Reaction conditions"]
+    paths = app.paths[0].get().split()
     for sheetname in sheetnames:
-        data = pd.read_excel(path[0], sheet_name=sheetname)
+        data = pd.read_excel(paths[0], sheet_name=sheetname)
         channels = [str(x) for x in list(data.keys())]
         all_channels.extend(channels)
-    return all_channels
+        #use set to have a unique list of channel names. Need to check each
+        #individual file to check whether there is a channel of that name.
+    
+    tmp = []
+    transmission = []
+    for path in paths:
+        data1 = pd.read_excel(path, sheet_name="Raw signal intensities")
+        channels = [str(x) for x in list(data1.keys())]
+        data = pd.read_excel(paths[0], sheet_name="Untitled (root)")
+        tmp1 = np.asarray(data[[str(x) for x in list(data.keys())][17]])
+        for c in range(len(channels)):
+#time series channels are "m/z 21.00 ch0", mass scan channels are "m/z 21.0"
+#This changes the internal keynames to ints, i.e. "m/z 21" they are changed
+#depending on mass scan or time series later.
+            tmp2 = channels[c].split()
+            tmp3 = tmp2[0] + " " + str(int(float(tmp2[1])))
+            tmp4 = tmp3 + " " + str(tmp1[18+c])
+            tmp.append(tmp3)
+            transmission.append(tmp4)
+    transmission = list(set(transmission))
+    transmission.sort()
+    tmp = list(set(tmp))
+    tmp.sort()
+    all_channels.extend(tmp)
+    return all_channels, transmission
 
 # Converts the user input to parameter list
 def convertparam(param):
@@ -244,24 +273,23 @@ def convertparam(param):
        
     return param
 
-def get_xdata(xoption, reloffset):
+def get_xdata(xoption, reloffset, filenames):
 #Returns xdata list and xlabel depending on xoption.
-    
+
     if xoption == "Relative Time":
         if reloffset != "hh:mm:ss":
-            print("reloffset is not NULL")
+            print("Relative time starts at " + reloffset)
             reloffset = datetime.datetime.strptime(reloffset.strip(),
                                                '%Y-%m-%d %H:%M:%S')
-            print(reloffset)
+
         elif reloffset == "hh:mm:ss":
-            print("reloffset is NULL")
-            f = app.paths[0].get().split()[0]
+            f = filenames[0]
             data = pd.read_excel(f, sheet_name="Time   Cycle")
             reloffset = data["Absolute Time"][0].to_pydatetime()
-            print(reloffset)   
+            print("Relative time starts at " + reloffset)
         
     x = []
-    for f in app.paths[0].get().split():
+    for f in filenames:
         data = pd.read_excel(f, sheet_name="Time   Cycle")
         if xoption == "Cycle number":
             data = np.asarray(data[xoption])
@@ -283,10 +311,11 @@ def get_xdata(xoption, reloffset):
             tmp = [(item-reloffset).total_seconds()/60.0 for item in tmp]
             x.extend(tmp)
             xlabel = xoption + " (mins)"
+           # print("x length:", len(x))
                    
     return x, xlabel
 
-def get_ydata(allchannels, channel_keys):
+def get_ydata(allchannels, channel_keys, transmission, filenames):
 #Args are the list of channels & channel keys. Returns a list of lists of 
 # ydata from the corresponding channels and the labels. 
 
@@ -298,8 +327,10 @@ def get_ydata(allchannels, channel_keys):
 #like: [[],[],[usrchosen1, usrchosen2]] etc
 
     ydata = []
+    rawsignal = []
     linelabels = []
     chosenkeychannels = [[] for _ in range(3)]
+    files_to_remove = []
 
     InstrumentChannels = channel_keys[:14]
     ReacCondChannels = channel_keys[14:23]
@@ -310,35 +341,110 @@ def get_ydata(allchannels, channel_keys):
     ReacCondChannels = allchannels[14:23]
     QuadChannels = allchannels[23:]
     chosenchannels = [InstrumentChannels, ReacCondChannels, QuadChannels]
+
+    if app.params[5].get() == "Raw signal intensities":
+        ylabel = "Raw signal intensity (cps)"
+        sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
+           
+    elif app.params[5].get() == "Concentration":
+        ylabel = "Concentration (ppb)"
+        sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
+            
+    elif app.params[5].get() == "Instrument" or app.params[5].get() == "Reaction conditions" :
+        ylabel = "ARB"
+        sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
+    
+    elif app.params[5].get() == "Normalised signal intensity":
+        ylabel = "Normalised signal intensity (ncps)"
+        sheetnames = ["Instrument","Reaction conditions", "Raw signal intensities"]
     
     for m in range(3):
         for n in range(len(chosenchannels[m])):
             if chosenchannels[m][n] == 1:
-                print(keychannels[m][n])
                 chosenkeychannels[m].append(keychannels[m][n])
                 linelabels.append(keychannels[m][n])
 
-    sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
-    for n in range(len(sheetnames)):
+####Separate into instrumental/reaction condition keys and raw sig/conc keys
+#This part only looks at the instrument and reaction conditions sheets
+    for n in range(len(sheetnames[:2])):
         for i in range(len(chosenkeychannels[n])):
             tmp2 = []
-            for f in app.paths[0].get().split():
+            for f in filenames:
                 data = pd.read_excel(f, sheet_name=sheetnames[n])
                 tmp1 = np.asarray(data[chosenkeychannels[n][i]])
                 tmp1 = [0 if item == '#NV' else item for item in tmp1]
                 tmp2.extend(tmp1)
             ydata.append(tmp2)
 
-    if app.params[5].get() == "Raw signal intensities":
-            ylabel = "Raw signal intensity (cps)"
-           
-    elif app.params[5].get() == "Concentration":
-        ylabel = "Concentration (ppb)"
+#This part only looks at the concentration and raw signal intensities sheets.
+    for i in range(len(chosenkeychannels[2])):
+        tmp2 = []
+        for f in filenames:
+#Need to know whether this is a mass scan or time series for the chosenkeychannel names.
+#Time series: "m/z 21.00 ch0", mass scan: "m/z 21.0"
+            if pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "SCAN data ":
+                tmp3 = chosenkeychannels[2][i] + ".0"
+            elif pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "MID data ":
+                tmp3 = chosenkeychannels[2][i] + ".00"
+            data = pd.read_excel(f, sheet_name=sheetnames[2])
+            tmpkeys = [str(x) for x in list(data.keys())]
+            if tmp3.split()[1] not in [z.split()[1] for z in tmpkeys]:
+                files_to_remove.append(f)
+            else:
+                for key1 in tmpkeys:
+                    if tmp3.split()[1] == key1.split()[1]:
+                        tmp1 = np.asarray(data[key1])
+                        tmp1 = [0 if item == '#NV' else item for item in tmp1]
+                        tmp2.extend(tmp1)
             
-    elif app.params[5].get() == "Instrument" or app.params[5].get() == "Reaction conditions" :
-        ylabel = "ARB"
-    
-    return ydata, ylabel, linelabels
+#IMPORTANT: If there is not one of this chosen key in the file, the corresponding x-values
+#need to be removed. Would be very easy to remove the file from the GUI list.
+
+        ydata.append(tmp2)
+
+    files_to_remove = list(set(files_to_remove))
+    if len(files_to_remove) > 0:
+        for f in files_to_remove:
+            filenames.remove(f)
+            print("Removing " + f)
+
+    for i in range(len(chosenkeychannels[n])):
+        tmp2 = []
+        for f in app.paths[0].get().split():
+            data = pd.read_excel(f, sheet_name="Raw signal intensities")
+            tmp1 = np.asarray(data[chosenkeychannels[n][i]])
+            tmp1 = [0 if item == '#NV' else item for item in tmp1]
+            tmp2.extend(tmp1)
+        rawsignal.append(tmp2)
+
+    tmp = []
+    if app.params[5].get() == "Normalised signal intensity":
+        H3Odata = []
+        for f in filenames:
+#Need to know whether this is a mass scan or time series for the chosenkeychannel names.
+#Time series: "m/z 21.00 ch0", mass scan: "m/z 21.0"
+            if pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "SCAN data ":
+                tmp3 = chosenkeychannels[2][i] + ".0"
+            elif pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "MID data ":
+                tmp3 = chosenkeychannels[2][i] + ".00"
+            data = pd.read_excel(f, sheet_name=sheetnames[2])
+            tmpkeys = [str(x) for x in list(data.keys())]
+            for key1 in tmpkeys:
+                if int(float(key1.split()[1])) == 21:
+                    tmp1 = np.asarray(data[key1])
+                    tmp1 = [0 if item == '#NV' else item for item in tmp1]
+                    H3Odata.extend(tmp1)
+        
+        for n in range(len(linelabels)):
+            if int(linelabels[n].split()[1]) == 21:
+                    tmp.append(np.array(ydata[n])*500/0.7/5e6)
+            for m in range(len(transmission)):
+                if int(linelabels[n].split()[1]) == int(transmission[m].split()[1]) and int(linelabels[n].split()[1]) != 21:
+                    tmp.append(np.array(H3Odata)*500/0.7/5e6*np.array(ydata[n])/float(transmission[m].split()[2]))
+
+        ydata = tmp
+    print("chosenchannels:", linelabels)
+    return ydata, ylabel, linelabels, rawsignal, filenames
 
 def smooth(y, box_pts):
 #Smooth function to return the moving average of length box_pts from list y.     
@@ -349,18 +455,21 @@ def smooth(y, box_pts):
 def plot():
     if app.params[7].get() == "Time series":
         plot_time_series()
-        for tickbox in app.tickboxes:
-            tickbox.destroy()
+      #  for tickbox in app.tickboxes:
+      #      tickbox.destroy()
 
     elif app.params[7].get() == "Mass scan":
         plot_mass_scan()
-        for tickbox in app.tickboxes:
-            tickbox.destroy()
+     #   for tickbox in app.tickboxes:
+     #       tickbox.destroy()
 
 def plot_mass_scan():
     print("plotting mass scan")
-                
-    all_channels = get_channels()
+        
+#Is it worth having a readme just for mass scans that indicates what times
+#to analyse?
+
+    all_channels, transmission = get_channels()
     print(all_channels)
     channels = np.zeros(len(all_channels), dtype=int)
     n_channels = convertparam(app.channels[23].get())
@@ -370,7 +479,7 @@ def plot_mass_scan():
     for n in n_channels:
         channels[all_channels.index(n)] = 1
                
-    y, ylabel, chosenchannels = get_ydata(channels, all_channels)
+    y, ylabel, chosenchannels, rawsignal, filenames = get_ydata(channels, all_channels, transmission)
     print(ylabel, chosenchannels)
     lengths = []
 
@@ -410,7 +519,6 @@ def plot_mass_scan():
                 test[z] = ' '
         paths[i] = ''.join(test)
 
-        
     for i in range(len(paths)):
         fc = next(fccolours)
         ax.bar(ind + ind*(len(paths)*width) + width*i, means[i], width, 
@@ -426,8 +534,20 @@ def plot_mass_scan():
     ax.legend()
     plt.show()
 
+def filenames_sort(filenames):
+#Start with the first file, need to know the start time. Go to the next 
+#file, if the start time is after the first file it checks it against the next
+#file in the list and so on. Use a list of [<filename>, absolute_start_time]
+    entries = []
+    for x in range(len(filenames)):
+        entries.append(str(pd.read_excel(filenames[x], sheet_name="Time   Cycle")["Absolute Time"][0]) 
+        + " " + filenames[x])
+    entries.sort()
+    filenames = [z[27:] for z in entries]
+    return filenames
+
 def plot_time_series():
-    print("plotting time series")
+    print("Plotting time series")
 
     fig1, ax1 = plt.subplots(figsize=(20,10))#, constrained_layout=True)
     ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
@@ -438,26 +558,33 @@ def plot_time_series():
                                    'orange', 'grey','g'])
     linestyles = itertools.cycle(['-', '--', ':', '-.'])
         
-    all_channels = get_channels()
+    all_channels, transmission = get_channels()
     channels = [i.get() for i in app.channels]
 
-    ydata, ylabel, chosenchannels = get_ydata(channels, all_channels)
+#Is it worth having a function here that organises the files into the right order?
+    filenames = filenames_sort(app.paths[0].get().split())
+
+    ydata, ylabel, chosenchannels, rawsignal, filenames = get_ydata(channels, all_channels, transmission, filenames)
+
+    if app.params[5].get() == "Normalised signal intensity":
+        print("Plotting normalised signal intensity")
       
-    absolute_time = get_xdata("Absolute Time", app.params[0].get())[0]
+    absolute_time = get_xdata("Absolute Time", app.params[0].get(), filenames)[0]
     date = datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d')
     reloffset = date + ' ' + app.params[0].get()
-    xdata, xlabel = get_xdata(app.params[6].get(), reloffset)   
+    xdata, xlabel = get_xdata(app.params[6].get(), reloffset, filenames)   
     rel_time = get_xdata("Relative Time", 
-        datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d %H:%M:%S'))[0]
+        datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d %H:%M:%S'), filenames)[0]
     cycles_perxmins = int(np.argmin([abs(element*60 - float(app.params[1].get()))
                           for element in rel_time]))                          
     print("There are " + str(cycles_perxmins) + " cycles per " 
           + str(app.params[1].get()) + " seconds.")
     
-    for index in range(len(ydata)):
+    for index in range(len(chosenchannels)):
         mc = next(markercolours)
         lc = next(linecolours)
         ls = next(linestyles)
+        print(chosenchannels, str(app.params[1].get()))
         series_label = (chosenchannels[index] + ',\n ' + str(app.params[1].get())
         + ' second moving average')
 
@@ -468,6 +595,7 @@ def plot_time_series():
       #  ysmooth = ysmooth - min(ysmooth)
         
         if app.usebaseline.get() == 1:
+            #Note: Fix this baseline so that the background signal is taken away. 
             bs_corrected = baseline_als(ydata[index], float(app.baselineparams[0].get()), float(app.baselineparams[1].get()))
             correction = bs_corrected - min(bs_corrected)
             data = ydata[index] - correction
@@ -478,13 +606,14 @@ def plot_time_series():
             '\nbaseline')
        # bs_corrected2 = ydata[index][100:] - 
         #define when the baseline was taken and use that data with the baseline correction
-        ax1.plot(xdata, ydata[index], '-s',  ms=2, color=mc, alpha=0.2, lw=1)
+        print(xdata[-1], ydata[index][-1])
+        ax1.plot(xdata, ydata[index], '.',  ms=2, color=mc, alpha=0.5, lw=1)
         ax1.plot(xdata[-1+cycles_perxmins//2:-cycles_perxmins//2], ysmooth, lw=2, color=lc, label=series_label,
                  linestyle=ls)
 
     ax1.set(xlabel=xlabel, ylabel=ylabel)#, title=title)
     if app.paths[1].get() != '':
-        use_readme(date, absolute_time, xdata, ydata, ax1, chosenchannels)
+        use_readme(date, absolute_time, xdata, ydata, ax1, chosenchannels, rawsignal)
     
     if app.paths[2].get() != '':
         plot_spectroscopy(app.paths[2].get(), app.params[2].get(), date, ax1)
@@ -529,21 +658,23 @@ def plot_time_series():
     title.replace(" ","_")
     fig1.canvas.set_window_title(title)
     
+    if app.params[5].get() == "Concentration":
+        secax = ax1.twinx()
+        secax.spines["left"].set_position(("axes", -0.15))
+        secax.yaxis.set_label_position('left')
+        secax.yaxis.set_ticks_position('left')
+        secax.plot(xdata, [ConctoDen(n) for n in ydata[0]], color=None, alpha=0)
+        offset1 = str(int(np.log10(ConctoDen(max(ydata[0])))))
     
-    secax = ax1.twinx()
-    secax.plot(xdata, [ConctoDen(n) for n in ydata[0]], color=None, alpha=0)
-    ax1.figure.canvas.draw()
+        secax.set(ylabel=r"Species density ( $\times10^{" + offset1 + "}$cm$^{-3}$)")
+        scale_x = float( "1e" + offset1)
+        print(scale_x)
+        ticks_x = ticker.FuncFormatter(lambda x, pos: '{:.2f}'.format(x/scale_x))
+        secax.yaxis.set_major_formatter(ticks_x)
 
-   # offset = secax.yaxis.get_major_formatter().get_offset()
-   # secax.set(ylabel="Species density (" + offset + "cm$^{-3}$)")
-   # print(offset, type(offset))
-   # scale_x = float("1e"+offset[11:13])
-   # print(scale_x)
-   # ticks_x = ticker.FuncFormatter(lambda x, pos: '{:.2f}'.format(x/scale_x))
-   # secax.yaxis.set_major_formatter(ticks_x)
-    secax.grid(b=None)
+   # secax.grid(b=None)
 
-    secax.set(ylabel="Species density (cm$^{-3}$)")
+    #secax.set(ylabel="Species density (cm$^{-3}$)")
 
    # secax = ax1.secondary_yaxis('right', functions=(ConctoDen,DentoConc))
    # ax1.figure.canvas.draw()
@@ -650,7 +781,7 @@ def trim_axs(axs, N):
         ax.remove()
     return axs[:N]
 
-def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
+def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels, rawsignal):
 
     indices = []
     times = []
@@ -659,6 +790,8 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
     eventcycles = []
     y_calibdata = []
     y_errcalibdata = []
+    rawsig_calibdata = []
+    rawsig_stddev = []
     stddevs = []
     
     with open(app.paths[1].get()) as file:
@@ -702,7 +835,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         cycle2 = bisect.bisect_right(absolute_time, datetime_object2)
         cycles.append([cycle1, cycle2])
                                    
-    cycle_labels = [string.ascii_uppercase[x] 
+    cycle_labels = [string.ascii_lowercase[x] 
         + '. ' + times[x][2] for x in range(len(cycles))]
 
        # for x in range(10):   
@@ -710,40 +843,48 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
        #         '%Y-%m-%d %H:%M:%S') + datetime.timedelta(seconds=x*35)   
        #     cycle = bisect.bisect_right(absolute_time, time)
        #     ax1.axvline(xdata[cycle],lw=1, color = 'r')
-
+    arrow_height=float(app.arrow_heightent.get())
+    arrow_heightoffset=float(app.arrow_heightoffsetent.get())
     for x in range(len(cycles)):
-        #arrow_height should be user chosen, using the GUI
-
-        arrow_height=float(app.arrow_heightent.get())  #max(ydata[0])/(len(cycles) + 2) * (x+1)
-        
 
         ax.axvline(xdata[(cycles[x])[0]],lw=1.5, color = times[x][3])#, label=cycle_labels[x])
         ax.axvline(xdata[(cycles[x])[1]],lw=1.5, color = times[x][3])
        # ax.plot(xdata[0],[0], label=cycle_labels[x], color='white')
             
-        ax.annotate('', xy=(xdata[(cycles[x])[0]], arrow_height), 
-            xytext=(xdata[(cycles[x])[1]], arrow_height), 
+        ax.annotate('', xy=(xdata[(cycles[x])[0]], arrow_height+x*arrow_heightoffset), 
+            xytext=(xdata[(cycles[x])[1]], arrow_height+x*arrow_heightoffset), 
             arrowprops=dict(connectionstyle="arc3", arrowstyle="-", color=times[x][3]))
             
         ax.annotate(
-            cycle_labels[x][0],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + 0.1*max(ydata[0])/(len(cycles) + 2)))
+            cycle_labels[x][0],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + 0.1*max(ydata[0])/(len(cycles) + 2)+x*arrow_heightoffset))
 
     filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
     with open(filename, 'w') as fi:
-        fi.write("Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean\n")
+        fi.write("#Label, Mean (ppb), Standard deviation (ppb), Number of samples, Standard error of the mean (val,ppb), std err (%), Mean (cps)\n")
         for y in range(len(ydata)):
             for x in range(len(cycles)):         
                 mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
                 stddev = np.std(ydata[y][cycles[x][0]:cycles[x][1]])
+                rawsigmean = np.mean(rawsignal[y][cycles[x][0]:cycles[x][1]])
+                rawsigdev = np.std(rawsignal[y][cycles[x][0]:cycles[x][1]])
                 n = len(ydata[y][cycles[x][0]:cycles[x][1]])
-                stderr = stddev/np.sqrt(n)                
+                stderr = stddev/np.sqrt(n)
+                stderrper = stderr/mean*100
                 print(string.ascii_uppercase[x] + '.\nmean: ' + str(mean) 
                     + '\nstd. dev.: ' + str(stddev) + '\nn: ' + str(n) 
-                    + '\nstd. err.: ' + str(stderr) + '\n')
+                    + '\nstd. err.: ' + str(stderr) + '\nstd. err. %: ' + str(stderrper)
+                    + '\nmean(cps): ' + str(rawsigmean) + '\n')
                 fi.write(string.ascii_uppercase[x] + ', ' + str(mean) 
                     + ', ' + str(stddev) + ', ' + str(n) 
-                    + ', ' + str(stderr) + '\n')
+                    + ', ' + str(stderr) + ', ' + str(stderrper) 
+                    + ', ' + str(rawsigmean) + '\n')
+###NOTE: part below for the change in samples & decrease in error
+              #  for n in ydata[y][cycles[x][0]:cycles[x][1]]:
+              #      fi.write("{0}\n".format(n))
+
                 y_calibdata.append(mean)
+                rawsig_calibdata.append(rawsigmean)
+                rawsig_stddev.append(rawsigdev)
                 y_errcalibdata.append(stderr)
                 stddevs.append(stddev)    
    
@@ -758,22 +899,19 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
         for x in range(len(cycles)):
             dilution.append(float(times[x][2]))
         
-        filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
-        with open(filename, 'w') as fi:
-            fi.write("# Label, Mean, Standard deviation, Number of points averaged over, Standard error of the mean (calculated using numpy)\n")
-            for y in range(len(ydata)):
-                for x in range(len(cycles)):         
-                    mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
-                    stddev = np.std(ydata[y][cycles[x][0]:cycles[x][1]])
-                    n = len(ydata[y][cycles[x][0]:cycles[x][1]])
-                    stderr = stddev/np.sqrt(n)                
-                    print(string.ascii_uppercase[x] + '.\nmean: ' + str(mean) 
-                        + '\nstd. dev.: ' + str(stddev) + '\nn: ' + str(n) 
-                        + '\nstd. err.: ' + str(stderr) + '\n')
-                    fi.write(string.ascii_uppercase[x] + ', ' 
-                        + str(dilution[x]) + ', ' + str(mean) 
-                        + ', ' + str(stddev) + ', ' + str(n) 
-                        + ', ' + str(stderr) + '\n')
+       # filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
+       # with open(filename, 'w') as fi:
+       #     fi.write("# Label, dilution, Mean, Standard deviation, Number of points averaged over, Standard error of the mean (calculated using numpy)\n")
+       #     for y in range(len(ydata)):
+       #         for x in range(len(cycles)):         
+       #             mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
+       #             stddev = np.std(ydata[y][cycles[x][0]:cycles[x][1]])
+       #             n = len(ydata[y][cycles[x][0]:cycles[x][1]])
+       #             stderr = stddev/np.sqrt(n)                
+       #             fi.write(string.ascii_uppercase[x] + ', ' 
+       #                 + str(dilution[x]) + ', ' + str(mean) 
+       #                 + ', ' + str(stddev) + ', ' + str(n) 
+       #                 + ', ' + str(stderr) + ', ' + str(stderrper) + '\n')
 
         #dilution = 
         #[0, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]
@@ -788,8 +926,14 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
                         fmt='x',lw=1.5, ms=7, mew=1.5,capsize=5, 
                         color='k', capthick=1.5, label=chosenchannels[0])
         
-        cols = 3
-        rows = len(dilution)//cols + 1
+        if len(dilution) == 4:
+            rows, cols = 2, 2
+        else:
+            rows = 3
+            if len(dilution)%rows == 0:
+                cols = len(dilution)//rows
+            else:
+                cols = len(dilution)//rows + 1
         fig3 = plt.figure()
         ax = fig3.add_subplot(111) 
         ax.spines['top'].set_color('none')
@@ -807,7 +951,6 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
                 axs.append(fig3.add_subplot(cols, rows, co))
                 co += 1
 
-
      #   fig3, axs = plt.subplots(rows, cols, constrained_layout=True)
         title = date + "_probability_densities" + "_" + chosenchannels[0].replace("/", "") 
         title.replace(" ","_")
@@ -823,21 +966,25 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             _, bins, _ = ax.hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=30, density=True)#,label=cycle_labels[co][0])
             y = ((1 / (np.sqrt(2 * np.pi) * stddevs[co])) *  np.exp(-0.5 * (1 / stddevs[co] * (bins - y_calibdata[co]))**2))
             ax.plot(bins, y, '--')
-            ax.axvline(y_calibdata[co], color='k', label=r"$\bar{x}$"+r"$_{0}$".format(cycle_labels[co][0]))
-            ax.axvline(y_calibdata[co] + stddevs[co], color='r', label=r"$\sigma_{}$".format(cycle_labels[co][0]))
+            if co == 0:
+                ax.axvline(y_calibdata[co], color='k', label=r"$\bar{x}$")
+                ax.axvline(y_calibdata[co] + stddevs[co], color='r', label=r"$\sigma$")
+                leg2 = ax.legend(loc=2).get_frame()
+                leg2.set_alpha(0)
+                leg2.set_edgecolor("None")
+            else:
+                ax.axvline(y_calibdata[co], color='k')
+                ax.axvline(y_calibdata[co] + stddevs[co], color='r')
             ax.axvline(y_calibdata[co] - stddevs[co], color='r')
+            ax.annotate(s="{})".format(cycle_labels[co][0]), xy=(0.9, 0.8),xycoords="axes fraction")
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.0e'))
             ax.locator_params(nbins=5, axis='x')
             ax.tick_params(axis='y', which='both', labelleft=False)
-            leg2 = ax.legend().get_frame()
-            leg2.set_alpha(0)
-            leg2.set_edgecolor("None")
-
+             
         for n in range(len(dilution)):
-            ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+0.5))
+            ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+0.5)).draggable()
 
         f, V  = np.polyfit(dilution, y_calibdata, 1, cov=True, w=stddevs)
-        
         title = date + ' characterisation'
         ax2.plot(dilution, np.polyval(np.poly1d(f), dilution), 
             'r-', lw=1.5, label='Linear fit')
@@ -850,7 +997,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
 
         ax2.tick_params(which='both',direction='in',top=True, right=True)
         ax2.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
-        ax2.set(xlabel='Dilution factor', 
+        ax2.set(xlabel=r'Dilution factor ($\frac{\phi_{VOC}}{\phi{tot}}$)', 
             ylabel = 'Measured\nconcentration (ppb)')#, title=title)        
         leg = ax2.legend().get_frame()
         leg.set_alpha(0)
@@ -864,12 +1011,16 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels):
             fi.write('# numpy polyfit\n')
             fi.write('# m = {}, sigma_m = {}\n'.format(f[0],np.sqrt(V[0][0])))
             fi.write('# c = {}, sigma_c = {}\n'.format(f[1],np.sqrt(V[1][1])))
-            fi.write('# scipy linregress does not take standard deviation of each point into account.')
+            fi.write('# scipy linregress does not take standard deviation of each point into account.\n')
             fi.write('# scipy linregress\n')
             fi.write('# m = {}\n'.format(slope))
             fi.write('# c = {}\n'.format(intercept))
             fi.write('# r_value = {}\n'.format(r_value))
             fi.write('# sigma_m = {}\n'.format(std_err))
+        
+     #   fig4, ax4 = plt.subplots()
+     #   print(y_calibdata, rawsig_calibdata)
+     #   ax4.loglog(y_calibdata, rawsig_calibdata)
 
 root = Tk()
 app = Application(master=root)
