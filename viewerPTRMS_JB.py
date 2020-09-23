@@ -45,7 +45,7 @@ if __name__ == "__main__":
             'lines.markersize':10,
             'lines.linewidth':3,
             'axes.linewidth':2,
-            'axes.grid':False,
+            'axes.grid':True,
             'figure.figsize': [16, 9],
             'font.family':'serif',
             'font.serif':'Times'}
@@ -83,7 +83,7 @@ class Application(Frame):
         # "[1] = Moving average duration
         # "[2] = Broadband lines
         # "[3] = OHN2 lines
-        # "[4] = Graph title
+        # "[4] = ylimits
         # "[5] = y-axis format
         # "[6] = x-axis format
         # "[7] = time series or mass scan
@@ -93,8 +93,8 @@ class Application(Frame):
         # "[1] = p parameter for baseline correction
         # plot and use baseline correction
         self.baselineparams = [[] for _ in range(2)]
-        labels = ["lambda", "p"]
-        defaults = [1e8, 0.01]
+        labels = ["Time to take\nbackground", "Calibration factor(s) (,sep)"]
+        defaults = ["hh:mm:ss - hh:mm:ss", 1]
         r, c = [0, 1], [7, 7]
         for i in range(len(labels)):
             Label(self, text=labels[i]).grid(column=c[i]-1, row=r[i])
@@ -117,9 +117,9 @@ class Application(Frame):
                      "Moving average\nduration (seconds)",
                      "Broadband lines \n (O peak at 777.25nm and 844.66nm):",
                      ("OHN2 lines (OH peak at 308.92nm, \nN2 peaks at " 
-                      "336.30nm, 357.56nm):"), "Graph 1 title:"]
+                      "336.30nm, 357.56nm):"), "y limits (l-axis, r-axis,\nspec-axis, hypen delimited)"]
         defaults = ["hh:mm:ss", 120.0, "777.25, 844.66", "308.92, 336.30, 357.56", 
-                    "experiment"]
+                    "ymin - ymax"]
         for i in range(len(labeltext)):
             Label(self, text=labeltext[i]).grid(column=c[i]-1, row=r[i])
             self.params[i] = Entry(self)
@@ -141,8 +141,20 @@ class Application(Frame):
         Checkbutton(self, text="Calibration", variable=self.params[8]).grid(
             column=2, row=2, sticky="NSEW")
         self.usebaseline = IntVar()
-        Checkbutton(self, text="Use & plot baseline correction", variable=self.usebaseline).grid(
+        Checkbutton(self, text="Use baseline correction\n& calibration factors", variable=self.usebaseline).grid(
             column=7, row=2, sticky="NSEW")
+        self.logy = IntVar()
+        Checkbutton(self, text="Logy", variable=self.logy).grid(
+            column=6, row=2, sticky="NSEW")
+        self.EN = IntVar()
+        Checkbutton(self, text="Plot E/N?", variable=self.EN).grid(
+            column=1, row=2, sticky="NSEW")
+        self.yaxis2 = IntVar()
+        Checkbutton(self, text="Use 2nd yaxis?", variable=self.yaxis2).grid(
+            column=1, row=3, sticky="NSEW")
+        self.specden = IntVar()
+        Checkbutton(self, text="Plot species density?", variable=self.specden).grid(
+            column=1, row=4, sticky="NSEW")
         Button(self, text="Load data", command=self.loaddata).grid(
             row=2, column=0, sticky="NSEW")
         Button(self, text="Plot", command=plot).grid(
@@ -273,47 +285,73 @@ def convertparam(param):
        
     return param
 
-def get_xdata(xoption, reloffset, filenames):
-#Returns xdata list and xlabel depending on xoption.
+def get_xdata(xoption, filenames):
+#Returns xdata list, xlabel depending on xoption, date and cycles per xmins
 
-    if xoption == "Relative Time":
-        if reloffset != "hh:mm:ss":
+    cycle = [[] for _ in range(len(filenames))]
+    absolute = [[] for _ in range(len(filenames))]
+    rel_time = [[] for _ in range(len(filenames))]
+    tmp2 = [[] for _ in range(len(filenames))]
+    cycles_perxmins = []
+
+    for i in range(len(filenames)):
+        for f in filenames[i]:
+            data = pd.read_excel(f, sheet_name="Time   Cycle")
+
+            cdata = np.asarray(data["Cycle number"])
+            offset = len(cdata)
+            cycle.extend([item + offset for item in cdata])
+
+            tmp = []
+            for time in range(len(data["Absolute Time"])):
+                tmp.append(data["Absolute Time"][time].to_pydatetime())
+            absolute[i].extend(tmp)
+                
+    for i in range(len(filenames)):
+        tmp = []
+        
+#This first section just calculates cycles_per_xmins
+        date = datetime.datetime.strftime(absolute[i][0], '%Y-%m-%d')
+        print(date)
+        f = filenames[i][0]
+        data = pd.read_excel(f, sheet_name="Time   Cycle")
+        reloffset = absolute[i][0]
+        for time in range(len(absolute[i])):
+            tmp.append(absolute[i][time])
+        tmp = [(item-reloffset).total_seconds()/60.0 for item in tmp]
+        tmp2[i].extend(tmp)
+##Have to calculate cycles per xmins before using the reloffset otherwise cocks up ysmooth.
+        cycles_perxmins.append(int(np.argmin([abs(element*60 - float(app.params[1].get())) for element in tmp2[i]])))
+        tmp = []
+
+        if app.params[0].get() != "hh:mm:ss":
+            date = datetime.datetime.strftime(absolute[i][0], '%Y-%m-%d')
+            reloffset = date + ' ' + app.params[0].get()
             print("Relative time starts at " + reloffset)
             reloffset = datetime.datetime.strptime(reloffset.strip(),
                                                '%Y-%m-%d %H:%M:%S')
-
-        elif reloffset == "hh:mm:ss":
-            f = filenames[0]
+        elif app.params[0].get() == "hh:mm:ss":
+            date = datetime.datetime.strftime(absolute[i][0], '%Y-%m-%d')
+            f = filenames[i][0]
             data = pd.read_excel(f, sheet_name="Time   Cycle")
-            reloffset = data["Absolute Time"][0].to_pydatetime()
-            print("Relative time starts at " + reloffset)
-        
-    x = []
-    for f in filenames:
-        data = pd.read_excel(f, sheet_name="Time   Cycle")
-        if xoption == "Cycle number":
-            data = np.asarray(data[xoption])
-            offset = len(x)
-            x.extend([item + offset for item in data])
-            xlabel = xoption + " (ARB)"
-                    
-        elif xoption == "Absolute Time":
-            tmp = []
-            for time in range(len(data[xoption])):
-                tmp.append(data[xoption][time].to_pydatetime())
-            x.extend(tmp)
-            xlabel = xoption + " (hh:mm)"
-                    
-        elif xoption == "Relative Time":          
-            tmp = []
-            for time in range(len(data["Absolute Time"])):
-                tmp.append(data["Absolute Time"][time].to_pydatetime())      
-            tmp = [(item-reloffset).total_seconds()/60.0 for item in tmp]
-            x.extend(tmp)
-            xlabel = xoption + " (mins)"
-           # print("x length:", len(x))
-                   
-    return x, xlabel
+            reloffset = absolute[i][0]   
+            print("Relative time starts at " + datetime.datetime.strftime(reloffset,'%H:%M:%S'))
+        for time in range(len(absolute[i])):
+            tmp.append(absolute[i][time])
+        tmp = [(item-reloffset).total_seconds()/60.0 for item in tmp]
+        rel_time[i].extend(tmp)
+                
+    if xoption == "Cycle number":
+        xlabel = xoption + " (ARB)"
+        x = cycle
+    elif xoption == "Absolute Time":
+        xlabel = xoption + " (hh:mm)"
+        x = absolute
+    elif xoption == "Relative Time":
+        xlabel = xoption + " (mins)"
+        x = rel_time
+
+    return x, absolute, xlabel, cycles_perxmins, date
 
 def get_ydata(allchannels, channel_keys, transmission, filenames):
 #Args are the list of channels & channel keys. Returns a list of lists of 
@@ -328,9 +366,10 @@ def get_ydata(allchannels, channel_keys, transmission, filenames):
 
     ydata = []
     rawsignal = []
+    Udrift, Tdrift, pdrift = [], [], []
+    ENvalues = [Udrift, Tdrift, pdrift]
     linelabels = []
     chosenkeychannels = [[] for _ in range(3)]
-    files_to_remove = []
 
     InstrumentChannels = channel_keys[:14]
     ReacCondChannels = channel_keys[14:23]
@@ -347,7 +386,7 @@ def get_ydata(allchannels, channel_keys, transmission, filenames):
         sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
            
     elif app.params[5].get() == "Concentration":
-        ylabel = "Concentration (ppb)"
+        ylabel = "Concentration (ppbv)"
         sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
             
     elif app.params[5].get() == "Instrument" or app.params[5].get() == "Reaction conditions" :
@@ -355,7 +394,10 @@ def get_ydata(allchannels, channel_keys, transmission, filenames):
         sheetnames = ["Instrument","Reaction conditions", app.params[5].get()]
     
     elif app.params[5].get() == "Normalised signal intensity":
-        ylabel = "Normalised signal intensity (ncps)"
+        if app.usebaseline.get() == 1:
+            ylabel = "Concentration (ppbv)"
+        else:
+            ylabel = "Normalised signal intensity (ncps)"
         sheetnames = ["Instrument","Reaction conditions", "Raw signal intensities"]
     
     for m in range(3):
@@ -363,23 +405,30 @@ def get_ydata(allchannels, channel_keys, transmission, filenames):
             if chosenchannels[m][n] == 1:
                 chosenkeychannels[m].append(keychannels[m][n])
                 linelabels.append(keychannels[m][n])
+    
+    chosenkeychannels[2] = list(reversed(chosenkeychannels[2]))
+    linelabels = list(reversed(linelabels))
+    print(chosenkeychannels[2])
 
-####Separate into instrumental/reaction condition keys and raw sig/conc keys
+#Separate into instrumental/reaction condition keys and raw sig/conc keys
 #This part only looks at the instrument and reaction conditions sheets
     for n in range(len(sheetnames[:2])):
         for i in range(len(chosenkeychannels[n])):
             tmp2 = []
-            for f in filenames:
+            for f in filenames[i]:
                 data = pd.read_excel(f, sheet_name=sheetnames[n])
                 tmp1 = np.asarray(data[chosenkeychannels[n][i]])
                 tmp1 = [0 if item == '#NV' else item for item in tmp1]
                 tmp2.extend(tmp1)
             ydata.append(tmp2)
 
+    filenames = [filenames for _ in range(len(linelabels))]
+    files_to_add = [[] for _ in range(len(linelabels))]
 #This part only looks at the concentration and raw signal intensities sheets.
     for i in range(len(chosenkeychannels[2])):
         tmp2 = []
-        for f in filenames:
+        tmp4 = []
+        for f in filenames[i]:
 #Need to know whether this is a mass scan or time series for the chosenkeychannel names.
 #Time series: "m/z 21.00 ch0", mass scan: "m/z 21.0"
             if pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "SCAN data ":
@@ -387,64 +436,69 @@ def get_ydata(allchannels, channel_keys, transmission, filenames):
             elif pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "MID data ":
                 tmp3 = chosenkeychannels[2][i] + ".00"
             data = pd.read_excel(f, sheet_name=sheetnames[2])
+            rawsigdata = pd.read_excel(f, sheet_name="Raw signal intensities")
             tmpkeys = [str(x) for x in list(data.keys())]
-            if tmp3.split()[1] not in [z.split()[1] for z in tmpkeys]:
-                files_to_remove.append(f)
-            else:
+            if tmp3.split()[1] in [z.split()[1] for z in tmpkeys]:
+                files_to_add[i].append(f)
+#Fails when two different channels are selected with one not existing in one set of files.
+#If the first file it selects has more datapoints then when it tries ot plot the second
+#channel it fails. Need to have a list of filenames for each channel for the x-axis to
+#pull out data from.
+#Need to also have n sets of x-axis data lists.
                 for key1 in tmpkeys:
                     if tmp3.split()[1] == key1.split()[1]:
                         tmp1 = np.asarray(data[key1])
                         tmp1 = [0 if item == '#NV' else item for item in tmp1]
                         tmp2.extend(tmp1)
-            
+                        tmp1 = np.asarray(rawsigdata[key1])
+                        tmp1 = [0 if item == '#NV' else item for item in tmp1]
+                        tmp4.extend(tmp1)
+            ENdata = pd.read_excel(f, sheet_name="Reaction conditions")
+            Udrift.extend([0 if item == "#NV" else item for item in np.asarray(ENdata["Udrift"])])
+            pdrift.extend([0 if item == "#NV" else item for item in np.asarray(ENdata["pdrift"])])
+            Tdrift.extend([0 if item == "#NV" else item+273.15 for item in np.asarray(ENdata["Tdrift"])])
+
+        ydata.append(tmp2)
+        rawsignal.append(tmp4)
 #IMPORTANT: If there is not one of this chosen key in the file, the corresponding x-values
 #need to be removed. Would be very easy to remove the file from the GUI list.
 
-        ydata.append(tmp2)
+#This section below can screw around with the order of the files.
+    for i in range(len(files_to_add)):
+        files_to_add[i] = list(set(files_to_add[i]))
+        filenames[i] = files_to_add[i]
+    
+    for i in range(len(filenames)):
+        filenames[i] = filenames_sort(filenames[i])
 
-    files_to_remove = list(set(files_to_remove))
-    if len(files_to_remove) > 0:
-        for f in files_to_remove:
-            filenames.remove(f)
-            print("Removing " + f)
-
-    for i in range(len(chosenkeychannels[n])):
-        tmp2 = []
-        for f in app.paths[0].get().split():
-            data = pd.read_excel(f, sheet_name="Raw signal intensities")
-            tmp1 = np.asarray(data[chosenkeychannels[n][i]])
-            tmp1 = [0 if item == '#NV' else item for item in tmp1]
-            tmp2.extend(tmp1)
-        rawsignal.append(tmp2)
-
-    tmp = []
     if app.params[5].get() == "Normalised signal intensity":
-        H3Odata = []
-        for f in filenames:
+        for i in range(len(chosenkeychannels[2])):
+            H3Odata = []
+            for f in filenames[i]:
 #Need to know whether this is a mass scan or time series for the chosenkeychannel names.
 #Time series: "m/z 21.00 ch0", mass scan: "m/z 21.0"
-            if pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "SCAN data ":
-                tmp3 = chosenkeychannels[2][i] + ".0"
-            elif pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "MID data ":
-                tmp3 = chosenkeychannels[2][i] + ".00"
-            data = pd.read_excel(f, sheet_name=sheetnames[2])
-            tmpkeys = [str(x) for x in list(data.keys())]
-            for key1 in tmpkeys:
-                if int(float(key1.split()[1])) == 21:
-                    tmp1 = np.asarray(data[key1])
-                    tmp1 = [0 if item == '#NV' else item for item in tmp1]
-                    H3Odata.extend(tmp1)
+                if pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "SCAN data ":
+                    tmp3 = chosenkeychannels[2][i] + ".0"
+                elif pd.read_excel(f, sheet_name="Untitled (root)")["Title"][0] == "MID data ":
+                    tmp3 = chosenkeychannels[2][i] + ".00"
+                data = pd.read_excel(f, sheet_name=sheetnames[2])
+                tmpkeys = [str(x) for x in list(data.keys())]
+                for key1 in tmpkeys:
+                    if int(float(key1.split()[1])) == 21:
+                        tmp1 = np.asarray(data[key1])
+                        tmp1 = [0 if item == '#NV' else item for item in tmp1]
+                        H3Odata.extend(tmp1)
         
-        for n in range(len(linelabels)):
-            if int(linelabels[n].split()[1]) == 21:
-                    tmp.append(np.array(ydata[n])*500/0.7/5e6)
-            for m in range(len(transmission)):
-                if int(linelabels[n].split()[1]) == int(transmission[m].split()[1]) and int(linelabels[n].split()[1]) != 21:
-                    tmp.append(np.array(H3Odata)*500/0.7/5e6*np.array(ydata[n])/float(transmission[m].split()[2]))
+            for n in range(len(linelabels)):
+                if int(linelabels[n].split()[1]) == 21:
+                    tmp = (1e6*0.7)/(np.array(ydata[i])*500)
+                for m in range(len(transmission)):
+                    if int(linelabels[n].split()[1]) == int(transmission[m].split()[1]) and int(linelabels[n].split()[1]) != 21:
+                        tmp = (1e6*np.array(ydata[i])*0.7)/(np.array(H3Odata)*500*float(transmission[m].split()[2]))
+            ydata[i] = tmp
 
-        ydata = tmp
-    print("chosenchannels:", linelabels)
-    return ydata, ylabel, linelabels, rawsignal, filenames
+    print("Chosen channels:", linelabels)
+    return ydata, ylabel, linelabels, rawsignal, filenames, ENvalues
 
 def smooth(y, box_pts):
 #Smooth function to return the moving average of length box_pts from list y.     
@@ -535,60 +589,106 @@ def plot_mass_scan():
     plt.show()
 
 def filenames_sort(filenames):
-#Start with the first file, need to know the start time. Go to the next 
-#file, if the start time is after the first file it checks it against the next
-#file in the list and so on. Use a list of [<filename>, absolute_start_time]
     entries = []
     for x in range(len(filenames)):
         entries.append(str(pd.read_excel(filenames[x], sheet_name="Time   Cycle")["Absolute Time"][0]) 
         + " " + filenames[x])
     entries.sort()
-    filenames = [z[27:] for z in entries]
+    filenames = [z.split()[2] for z in entries]
     return filenames
 
 def plot_time_series():
     print("Plotting time series")
 
-    fig1, ax1 = plt.subplots(figsize=(20,10))#, constrained_layout=True)
-    ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
-                
-    markercolours = itertools.cycle(['k','lightgreen','r','magenta',
-                                     'midnightblue','darkorange'])
-    linecolours = itertools.cycle(['maroon','orchid', 'skyblue',
-                                   'orange', 'grey','g'])
-    linestyles = itertools.cycle(['-', '--', ':', '-.'])
+    #, constrained_layout=True)
+    #ax1.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
+    
+    markercolours = itertools.cycle(['k','blue','r','magenta','midnightblue','darkorange'])
+    linecolours = itertools.cycle(['grey','skyblue', 'orange','orchid', 'grey','g'])
+    linestyles = itertools.cycle(['-'])
         
     all_channels, transmission = get_channels()
     channels = [i.get() for i in app.channels]
-
-#Is it worth having a function here that organises the files into the right order?
     filenames = filenames_sort(app.paths[0].get().split())
-
-    ydata, ylabel, chosenchannels, rawsignal, filenames = get_ydata(channels, all_channels, transmission, filenames)
+    ydata, ylabel, chosenchannels, rawsignal, filenames, ENvalues = get_ydata(channels, all_channels, transmission, filenames)
+    
+    for i in range(len(filenames)):
+        filenames[i] = filenames_sort(filenames[i])
 
     if app.params[5].get() == "Normalised signal intensity":
         print("Plotting normalised signal intensity")
-      
-    absolute_time = get_xdata("Absolute Time", app.params[0].get(), filenames)[0]
-    date = datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d')
-    reloffset = date + ' ' + app.params[0].get()
-    xdata, xlabel = get_xdata(app.params[6].get(), reloffset, filenames)   
-    rel_time = get_xdata("Relative Time", 
-        datetime.datetime.strftime(absolute_time[0], '%Y-%m-%d %H:%M:%S'), filenames)[0]
-    cycles_perxmins = int(np.argmin([abs(element*60 - float(app.params[1].get()))
-                          for element in rel_time]))                          
-    print("There are " + str(cycles_perxmins) + " cycles per " 
-          + str(app.params[1].get()) + " seconds.")
+
+    xdata, absolute_time, xlabel, cycles_perxmins, date = get_xdata(app.params[6].get(), filenames)
+
+    if app.yaxis2.get() == 1:
+        if len(ydata) < 2:
+            print("ydata needs to be length 2")
+        else:
+            print("correct ydata length")
+            fig1, ax1 = plt.subplots(figsize=(20,10))
+            ax2 = ax1.twinx()
+            ax2.spines["right"].set_position(("axes", 1))
+            ax1.set(xlabel=xlabel)
     
+    else:
+        fig1, ax1 = plt.subplots(figsize=(20,10))
+        ax1.set(xlabel=xlabel, ylabel=ylabel)#, title=title)
+    
+    if app.EN.get() == 1:
+#E/N == (Udrift*Vm*Td*p0)/(NA*T0*pd*ldrift)
+#ENvalues = [Udrift, Tdrift, pdrift] everything in cgs!!
+        Vm = 22414
+        p0 = 1013.25
+        NA = 6.022e23
+        T0 = 273.15
+        ldrift = 9.3
+        print(ENvalues[0][0], ENvalues[1][0], ENvalues[2][0])
+        EN = (np.array(ENvalues[0])*Vm*np.array(ENvalues[1])*p0)/(ldrift*NA*T0*np.array(ENvalues[2]))*1e17
+        ysmooth = smooth(EN, cycles_perxmins[0])
+##Need to make a second axis on the right hand side
+        ax2 = ax1.twinx()
+        ax2.set_ylabel("E/N (Td)")
+        ax2.spines["right"].set_position(("axes", 1))
+        ax1.plot(xdata[0][0], ydata[0][0], label= "E/N", lw=2, color="maroon")
+        ax2.grid(False)
+        ax2.plot(xdata[0], EN, '.',  ms=2, color='r', lw=1)
+        ax2.plot(xdata[0][-1+cycles_perxmins[0]//2:-cycles_perxmins[0]//2], ysmooth,
+        lw=2, color="maroon", label="E/N (Td)", linestyle='-')
+    
+    #PROBLEM: The cycles_per_xmins is per each file NOT each m/z - atm the cycles per x mins
+    #is taken from the first file that's read in
     for index in range(len(chosenchannels)):
+        #Could the ydata and xdata be called when the file is loaded in?
+        #i.e. have the lists ready to go after load data is pressed?
+        print("There are " + str(cycles_perxmins[index]) + " cycles per " 
+              + str(app.params[1].get()) + " seconds.")
+    
         mc = next(markercolours)
         lc = next(linecolours)
         ls = next(linestyles)
-        print(chosenchannels, str(app.params[1].get()))
-        series_label = (chosenchannels[index] + ',\n ' + str(app.params[1].get())
+
+        compound = ','
+        if chosenchannels[index] == "m/z 69":
+            compound = r', isoprene (C$_5$H$_9^+$)'
+        elif chosenchannels[index] == "m/z 87":
+            compound = r', pentanal (C$_5$H$_{11}$O$^+$)'
+        elif chosenchannels[index] == "m/z 59":
+            compound = r', propanal (C$_3$H$_{7}$O$^+$)'
+        elif chosenchannels[index] == "m/z 75":
+            compound = r', diethyl-ether (C$_4$H$_{11}$O$^+$)'
+        elif chosenchannels[index] == "m/z 43":
+            compound = r', 1-propanol (C$_3$H$_{7}^+$)'
+        elif chosenchannels[index] == "m/z 30":
+            compound = r', NO$^+$'
+        elif chosenchannels[index] == "m/z 95":
+            compound = r', phenol (C$_6$H$_7$O$^+$)'
+        elif chosenchannels[index] == "m/z 79":
+            compound = r', benzene (C$_6$H$_7^+$)'
+
+        series_label = (chosenchannels[index] + compound +'\n ' + str(app.params[1].get())
         + ' second moving average')
 
-        ysmooth = smooth(ydata[index], cycles_perxmins)
+        ysmooth = smooth(ydata[index], cycles_perxmins[index])
         #Find the difference between the baseline correction and the minimum value of the baseline correction to apply to the 
         #data.
       #  ydata[index] = ydata[index] - min(ysmooth)
@@ -596,34 +696,154 @@ def plot_time_series():
         
         if app.usebaseline.get() == 1:
             #Note: Fix this baseline so that the background signal is taken away. 
-            bs_corrected = baseline_als(ydata[index], float(app.baselineparams[0].get()), float(app.baselineparams[1].get()))
-            correction = bs_corrected - min(bs_corrected)
-            data = ydata[index] - correction
-            ax1.plot(xdata, data, ls=':', lw=2, color=lc, label=series_label + 
-            '\nbaseline corrected')
+            #Need to know from the user when the blank is, then take this away from the ydata
 
-            ax1.plot(xdata, bs_corrected, ls='--', lw=2, color=lc, label=series_label + 
-            '\nbaseline')
-       # bs_corrected2 = ydata[index][100:] - 
-        #define when the baseline was taken and use that data with the baseline correction
-        print(xdata[-1], ydata[index][-1])
-        ax1.plot(xdata, ydata[index], '.',  ms=2, color=mc, alpha=0.5, lw=1)
-        ax1.plot(xdata[-1+cycles_perxmins//2:-cycles_perxmins//2], ysmooth, lw=2, color=lc, label=series_label,
-                 linestyle=ls)
+            ##Use the times to get the correct index - similar to the readme.
+            times = app.baselineparams[0].get().split('-')
+            times = [n.strip() for n in times]
+            
+            datetime_object1 = datetime.datetime.strptime(
+                date + ' ' + times[0], '%Y-%m-%d %H:%M:%S')
+            cycle1 = bisect.bisect_right(absolute_time[index], datetime_object1)
 
-    ax1.set(xlabel=xlabel, ylabel=ylabel)#, title=title)
+            datetime_object2 = datetime.datetime.strptime(
+                date + ' ' + times[1], '%Y-%m-%d %H:%M:%S')
+            cycle2 = bisect.bisect_right(absolute_time[index], datetime_object2)
+            baseline = ydata[index][cycle1:cycle2]
+            baseline_mean = np.mean(baseline)
+            print(baseline_mean)
+            data = ydata[index] - baseline_mean
+            factors = app.baselineparams[1].get().split(',')
+            factors = [float(n) for n in factors]
+            print(chosenchannels[index], factors[index])
+            ydata[index] = np.array(data)/factors[index]
+
+            ysmooth = smooth(ydata[index], cycles_perxmins[index])
+
+            if app.logy.get() == 0:
+                if app.yaxis2.get() == 1 and index==1:
+                    ax1.plot(xdata[index][0], ydata[index][0], lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    ax2.plot(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#,alpha=0.5,
+                    ax2.plot(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                         linestyle=ls)
+                    ax2.yaxis.set_minor_formatter(ScalarFormatter())
+                    ax2.yaxis.set_major_formatter(ScalarFormatter())
+                    ax2.set(ylabel=chosenchannels[index] + " " + ylabel )
+                    ax1.set(ylabel=chosenchannels[index-1] + " " + ylabel)
+                    ax1.grid(False)
+                    ax2.grid(False)
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[2])
+                        ymax = float(app.params[4].get().split('-')[3])
+                        ax2.set_ylim(ymin, ymax)
+                else:
+                    ax1.plot(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#,alpha=0.5,
+                    ax1.plot(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                         linestyle=ls)
+                    ax1.yaxis.set_minor_formatter(ScalarFormatter())
+                    ax1.yaxis.set_major_formatter(ScalarFormatter())
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[0])
+                        ymax = float(app.params[4].get().split('-')[1])
+                        ax1.set_ylim(ymin, ymax)
+
+            elif app.logy.get() == 1:
+                if app.yaxis2.get() == 1 and index==1:
+                    ax1.plot(xdata[index][0], ydata[index][0], lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    ax2.semilogy(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#,alpha=0.5,
+                    ax2.semilogy(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                         linestyle=ls)
+                    ax2.yaxis.set_minor_formatter(ScalarFormatter())
+                    ax2.yaxis.set_major_formatter(ScalarFormatter())
+                    ax2.set(ylabel=chosenchannels[index] + " " + ylabel )
+                    ax1.set(ylabel=chosenchannels[index-1] + " " + ylabel)
+                    ax1.grid(False)
+                    ax2.grid(False)
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[2])
+                        ymax = float(app.params[4].get().split('-')[3])
+                        ax2.set_ylim(ymin, ymax)
+                else:
+                    ax1.semilogy(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#,alpha=0.5,
+                    ax1.semilogy(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                         linestyle=ls)
+                    ax1.yaxis.set_minor_formatter(ScalarFormatter())
+                    ax1.yaxis.set_major_formatter(ScalarFormatter())
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[0])
+                        ymax = float(app.params[4].get().split('-')[1])
+                        ax1.set_ylim(ymin, ymax)
+            
+        elif app.usebaseline.get() == 0:
+            if app.logy.get() == 0:
+                if app.yaxis2.get() == 1 and index==1:
+                    ax1.plot(xdata[index][0], ydata[index][0], lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    ax2.plot(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#, alpha=0.5
+                    ax2.plot(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    ax2.yaxis.set_minor_formatter(ScalarFormatter())
+                    ax2.yaxis.set_major_formatter(ScalarFormatter())
+                    ax2.set(ylabel=chosenchannels[index] + " " + ylabel )
+                    ax1.set(ylabel=chosenchannels[index-1] + " " + ylabel)
+                    ax1.grid(False)
+                    ax2.grid(False)
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[2])
+                        ymax = float(app.params[4].get().split('-')[3])
+                        ax2.set_ylim(ymin, ymax)
+                else:
+                    ax1.plot(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#, alpha=0.5
+                    ax1.plot(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    ax1.yaxis.set_minor_formatter(ScalarFormatter())
+                    ax1.yaxis.set_major_formatter(ScalarFormatter())
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[0])
+                        ymax = float(app.params[4].get().split('-')[1])
+                        ax1.set_ylim(ymin, ymax)
+
+            elif app.logy.get() == 1:
+                if app.yaxis2.get() == 1 and index==1:
+                    ax1.plot(xdata[index][0], ydata[index][0], lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    ax2.semilogy(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#, alpha=0.5
+                    ax2.semilogy(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    ax2.set(ylabel=chosenchannels[index] + " " + ylabel )
+                    ax1.set(ylabel=chosenchannels[index-1] + " " + ylabel)
+                    ax1.grid(False)
+                    ax2.grid(False)
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[2])
+                        ymax = float(app.params[4].get().split('-')[3])
+                        ax2.set_ylim(ymin, ymax)
+                else:
+                    ax1.semilogy(xdata[index], ydata[index], '.',  ms=2, color=mc, lw=1)#, alpha=0.5
+                    ax1.semilogy(xdata[index][-1+cycles_perxmins[index]//2:-cycles_perxmins[index]//2], ysmooth, lw=2, color=lc, label=series_label,
+                        linestyle=ls)
+                    if app.params[4].get() != "ymin - ymax":
+                        ymin = float(app.params[4].get().split('-')[0])
+                        ymax = float(app.params[4].get().split('-')[1])
+                        ax1.set_ylim(ymin, ymax)
+
     if app.paths[1].get() != '':
-        use_readme(date, absolute_time, xdata, ydata, ax1, chosenchannels, rawsignal)
+        use_readme(date, absolute_time[0], xdata[0], ydata, ax1, chosenchannels, rawsignal)
     
-    if app.paths[2].get() != '':
-        plot_spectroscopy(app.paths[2].get(), app.params[2].get(), date, ax1)
+    if app.paths[2].get() != '' and app.paths[3].get() == '':
+        #app.paths[2] == broadband
+        plot_spectroscopy(app.paths[2].get(), app.params[2].get(), date, ax1, ["m", "b"], [1.2], 4)
+        
+    if app.paths[3].get() != '' and app.paths[2].get() == '':
+        #app.paths[3] == OHN2
+        plot_spectroscopy(app.paths[3].get(), app.params[3].get(), date, ax1, ["r", "g"], [1.2], 4)
     
-    if app.paths[3].get() != '':
-        plot_spectroscopy(app.paths[3].get(), app.params[3].get(), date, ax1)
-    
-    
-    ax1.yaxis.set_minor_formatter(ScalarFormatter())
-    ax1.yaxis.set_major_formatter(ScalarFormatter())
+    if app.paths[2].get() != '' and app.paths[3].get() != '':
+        plot_spectroscopy(app.paths[3].get(), app.params[3].get(), date, ax1, ["r", "g"], [1.2], 4)
+        plot_spectroscopy(app.paths[2].get(), app.params[2].get(), date, ax1, ["m", "b"], [1.4], 6)
+
    # leg = ax1.legend(ncol=3).get_frame() #
    # leg.set_alpha(0.8)
    # leg.set_edgecolor('white')
@@ -653,24 +873,44 @@ def plot_time_series():
         x = n*1e9*1e6*k*T/p
         return x
 
-    
-    title = date + '_' + app.params[4].get() + "_" + chosenchannels[0].replace("/", "") 
+    title = date + '_experiment_' + chosenchannels[0].replace("/", "") 
     title.replace(" ","_")
     fig1.canvas.set_window_title(title)
     
-    if app.params[5].get() == "Concentration":
+    if app.specden.get() == 1:
+        #ax1.set(ylabel=" m/z 95 Concentration (ppbv)")
+        #ax2.set(ylabel="m/z 79 Concentration (ppbv)")
         secax = ax1.twinx()
         secax.spines["left"].set_position(("axes", -0.15))
         secax.yaxis.set_label_position('left')
         secax.yaxis.set_ticks_position('left')
-        secax.plot(xdata, [ConctoDen(n) for n in ydata[0]], color=None, alpha=0)
-        offset1 = str(int(np.log10(ConctoDen(max(ydata[0])))))
-    
+
+#Need to calculate the most "useful" order of 10 for the offset calculation.
+#Problem at the minute is using max - leads to nan issues.
+#The nan issues are caused by the normalised cps calculations, the first few measurements
+#of H3O+ (mz21) are zeroes, leading to divide by zero errors - meaning there is inf entries
+# in the calculated normalised cps measurements.
+
+        tmp = [x for x in ydata[0] if str(x) != 'nan']
+        tmp = [x for x in tmp if float(x) != 0]
+        tmp = np.asarray(tmp)
+        tmp = tmp[tmp < 1e20]
+            
+        offset1 = "11" #str(int(np.log10(ConctoDen(tmp[0]))))
+        
+        offset = 1e11 #float("1e"+offset1)
         secax.set(ylabel=r"Species density ( $\times10^{" + offset1 + "}$cm$^{-3}$)")
-        scale_x = float( "1e" + offset1)
-        print(scale_x)
-        ticks_x = ticker.FuncFormatter(lambda x, pos: '{:.2f}'.format(x/scale_x))
-        secax.yaxis.set_major_formatter(ticks_x)
+        secax.plot(xdata[0], [ConctoDen(n)/offset for n in ydata[0]], color=None, alpha=0)
+
+     #   scale_x = float( "1e" + offset1)
+     #   print(scale_x)
+     #   ticks_x = ticker.FuncFormatter(lambda x, pos: '{:.2f}'.format(x/scale_x))
+     #   secax.yaxis.set_major_formatter(ticks_x)
+        secax.grid(False)
+        if app.params[4].get() != "ymin - ymax":
+            ylimits = ax1.get_ylim()
+#Need to get the values from the left hand side plot first.
+            secax.set_ylim(ConctoDen(ylimits[0])/offset,ConctoDen(ylimits[1])/offset)
 
    # secax.grid(b=None)
 
@@ -690,14 +930,15 @@ def plot_time_series():
         print("setting xaxis format to absolute time")
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
-    leg = ax1.legend(ncol=2).get_frame()
-    leg.set_alpha(0)
-    leg.set_edgecolor('None')
+  #  leg = ax1.legend(ncol=2).get_frame()
+  #  leg.set_alpha(1)
+  #  leg.set_edgecolor('None')
   #  fig1.tight_layout()
+    ax1.legend(fancybox=False, ncol=2, framealpha=1, edgecolor="black", loc='lower left', bbox_to_anchor=(0, 1))#
     plt.show()
 
-def plot_spectroscopy(path, lines, date, ax):
-
+def plot_spectroscopy(path, lines, date, ax, colors, position, index):
+#index = 4 for OH, N2 lines and 6 when Oxy atom lines
     filenames = os.listdir(path)
     filenames.sort()
     filenames = [path + '/' + f for f in filenames]
@@ -727,37 +968,78 @@ def plot_spectroscopy(path, lines, date, ax):
         xdata = [(item-reloffset).total_seconds()/60.0 for item in xdata]
 
     if len(lines) == 1:
+        comp = ''
+        if str(lines[0]) == "308.92":
+            comp = ", OH"
+        if str(lines[0]) == "844.66":
+            comp = ", O"
+
         ax2 = ax.twinx()
-        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
-        ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color='r')
-        ax.plot(xdata[0], ydata[0][0], label= "{}nm emission line".format(str(lines[0])),lw=2,color='r')
+        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color=colors[0])
+        mean = np.mean(ydata[0][:3])
+        ax2.plot(xdata, [x-mean for x in ydata[0]], label= "{}nm peak".format(str(lines[0])),lw=2,color=colors[0])
+        ax2.spines["right"].set_position(("axes", position[0]))
+        ax.plot(xdata[0], ydata[0][0], label= "{}~nm emission line".format(str(lines[0])) + comp,lw=2,color=colors[0])
+        ax2.grid(False)
+        if app.params[4].get() != "ymin - ymax":
+            ymin = float(app.params[4].get().split('-')[index])
+            ymax = float(app.params[4].get().split('-')[index+1])
+            ax2.set_ylim(ymin, ymax)
         if app.params[6].get() == "Absolute Time":
             ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     
     elif len(lines) == 2:
+        comp1 = ''
+        comp2 = ''
+        if str(lines[0]) == "308.92":
+            comp1 = ", OH"
+        if str(lines[1]) == "357.56":
+            comp2 = r", N$_2$"
+        if str(lines[1]) == "844.66":
+            comp2 = ", O"
+
         ax2 = ax.twinx()
-        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
-        ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color='r')
+        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color=colors[0])
+        mean = np.mean(ydata[0][:3])
+        ax2.plot(xdata, [x-mean for x in ydata[0]], label= "{}nm peak".format(str(lines[0])),lw=2,color=colors[0])
+        ax.plot(xdata[0], ydata[0][0], label= "{}~nm emission line".format(str(lines[0]))+comp1,lw=2,color=colors[0])
+        ax2.grid(False)
         ax3 = ax.twinx()
         ax3.spines["right"].set_position(("axes", 1.2))
-        ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color='g')
-        ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color='g')
+        ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color=colors[1])
+        mean = np.mean(ydata[1][:3])
+        ax3.plot(xdata, [x-mean for x in ydata[1]], label= "{}nm peak".format(str(lines[1])),lw=2,color=colors[1])
+        ax.plot(xdata[0], ydata[1][0], label= "{}~nm emission line".format(str(lines[1]))+comp2,lw=2,color=colors[1])
+        ax3.grid(False)
         if app.params[6].get() == "Absolute Time":
             ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        if app.params[4].get() != "ymin - ymax":
+            ymin = float(app.params[4].get().split('-')[index])
+            ymax = float(app.params[4].get().split('-')[index+1])
+            ax2.set_ylim(ymin, ymax)
+            ymin = float(app.params[4].get().split('-')[index+2])
+            ymax = float(app.params[4].get().split('-')[index+3])
+            ax3.set_ylim(ymin, ymax)
     
     elif len(lines) == 3:
         ax2 = ax.twinx()
-        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color='r')
-        ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color='r')
+        ax2.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[0])), color=colors[0])
+        ax2.plot(xdata, ydata[0], label= "{}nm peak".format(str(lines[0])),lw=2,color=colors[0])
+        ax.plot(xdata[0], ydata[1][0], label= "{}~nm emission line".format(str(lines[1])),lw=2,color=colors[0])
+        ax2.grid(False)
         ax3 = ax.twinx()
         ax3.spines["right"].set_position(("axes", 1.2))
-        ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color='g')
-        ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color='g')
+        ax3.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[1])), color=colors[1])
+        ax3.plot(xdata, ydata[1], ls=':', label= "{}nm peak".format(str(lines[1])),lw=2,color=colors[1])
+        ax.plot(xdata[0], ydata[1][0], label= "{}~nm emission line".format(str(lines[1])),lw=2,color=colors[1])
+        ax3.grid(False)
         ax4 = ax.twinx()
         ax4.spines["right"].set_position(("axes", 1.3))
-        ax4.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[2])), color='b')
-        ax4.plot(xdata, ydata[2], ls=':', label= "{}nm peak".format(str(lines[2])),lw=2,color='b')
+        ax4.set_ylabel("Absolute Irradiance ($\mu$W/cm$^2$/nm)\n {} nm".format(str(lines[2])), color=colors[2])
+        ax4.plot(xdata, ydata[2], ls=':', label= "{}nm peak".format(str(lines[2])),lw=2,color=colors[2])
+        ax.plot(xdata[0], ydata[1][0], label= "{}~nm emission line".format(str(lines[1])),lw=2,color=colors[2])
+        ax4.grid(False)
         if app.params[6].get() == "Absolute Time":
             ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
@@ -811,19 +1093,19 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels, rawsignal)
       #  for l in searchlines[indices[6]+1:indices[7]]:
       #      dilution = l.split(',')
       #      dilution = [m.strip() for m in dilution]
-      #  for l in searchlines[indices[8]+1:indices[9]]:
-   #         event = l.split(',')
-   #         event = [m.strip() for m in event]
+      #  for l in searchlines[indices[4]+1:indices[5]]:
+      #      event = l.split(',')
+      #      event = [m.strip() for m in event]
       #      events.append(l)
             
-  #  ax.plot(absolute_time[0],[0],color='purple',label="N$_2$ temperature taken")
-  #  for x in range(len(events)):
-  #      datetime_object1 = datetime.datetime.strptime(
-  #          date + ' ' + events[x].strip(), '%Y-%m-%d %H:%M:%S')
-  #      cycle = bisect.bisect_right(absolute_time, datetime_object1)
-  #      eventcycles.append(cycle)
-  #  for x in range(len(eventcycles)):
-  #      ax.axvline(xdata[eventcycles[x]],lw=1.5, color = 'purple')
+   # ax.plot(absolute_time[0],[0],color='purple',label="OH spectra taken")
+   # for x in range(len(events)):
+   #     datetime_object1 = datetime.datetime.strptime(
+   #         date + ' ' + events[x].strip(), '%Y-%m-%d %H:%M:%S')
+   #     cycle = bisect.bisect_right(absolute_time, datetime_object1)
+   #     eventcycles.append(cycle)
+   # for x in range(len(eventcycles)):
+   #     ax.axvline(xdata[eventcycles[x]],lw=1.5, color = 'purple')
 
     for x in range(len(times)):
         datetime_object1 = datetime.datetime.strptime(
@@ -833,10 +1115,12 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels, rawsignal)
         datetime_object2 = datetime.datetime.strptime(
             date + ' ' + times[x][1].strip(), '%Y-%m-%d %H:%M:%S')
         cycle2 = bisect.bisect_right(absolute_time, datetime_object2)
+#Part above is the normal action, part below is to restrict to only 100 measurement cycles.
+       # cycle2 = cycle1 + 100
         cycles.append([cycle1, cycle2])
                                    
-    cycle_labels = [string.ascii_lowercase[x] 
-        + '. ' + times[x][2] for x in range(len(cycles))]
+    cycle_labels = ['(' + string.ascii_uppercase[x] + ')' for x in range(len(cycles))]
+      #  + '. ' + times[x][2] for x in range(len(cycles))]
 
        # for x in range(10):   
        #     time = datetime.datetime.strptime(reloffset, 
@@ -845,6 +1129,7 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels, rawsignal)
        #     ax1.axvline(xdata[cycle],lw=1, color = 'r')
     arrow_height=float(app.arrow_heightent.get())
     arrow_heightoffset=float(app.arrow_heightoffsetent.get())
+
     for x in range(len(cycles)):
 
         ax.axvline(xdata[(cycles[x])[0]],lw=1.5, color = times[x][3])#, label=cycle_labels[x])
@@ -854,50 +1139,58 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels, rawsignal)
         ax.annotate('', xy=(xdata[(cycles[x])[0]], arrow_height+x*arrow_heightoffset), 
             xytext=(xdata[(cycles[x])[1]], arrow_height+x*arrow_heightoffset), 
             arrowprops=dict(connectionstyle="arc3", arrowstyle="-", color=times[x][3]))
-            
+        
         ax.annotate(
-            cycle_labels[x][0],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + 0.1*max(ydata[0])/(len(cycles) + 2)+x*arrow_heightoffset))
+            cycle_labels[x],((xdata[(cycles[x][0]+cycles[x][1])//2]), arrow_height + x*arrow_heightoffset + 0.5*arrow_heightoffset),
+            horizontalalignment="center").draggable()
+    
+    dilution = []
+    for x in range(len(cycles)):
+        dilution.append(float(times[x][2]))
 
-    filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
-    with open(filename, 'w') as fi:
-        fi.write("#Label, Mean (ppb), Standard deviation (ppb), Number of samples, Standard error of the mean (val,ppb), std err (%), Mean (cps)\n")
-        for y in range(len(ydata)):
-            for x in range(len(cycles)):         
-                mean = np.mean(ydata[y][cycles[x][0]:cycles[x][1]])
-                stddev = np.std(ydata[y][cycles[x][0]:cycles[x][1]])
-                rawsigmean = np.mean(rawsignal[y][cycles[x][0]:cycles[x][1]])
-                rawsigdev = np.std(rawsignal[y][cycles[x][0]:cycles[x][1]])
-                n = len(ydata[y][cycles[x][0]:cycles[x][1]])
+    for y in range(len(chosenchannels)):
+        filename = (os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + 
+                   date + '_' + app.params[5].get() + '_' +
+                   chosenchannels[y].replace("/", "") + ".txt")
+
+        with open(filename, 'w') as fi:
+            fi.write("#Label, xvalue, Mean, Standard deviation, Number of samples, Standard error of the mean, std err (%), Mean (cps)\n")
+            for x in range(len(cycles)):
+                tempydata =  ydata[y][cycles[x][0]:cycles[x][1]]
+                temprawsig =  rawsignal[y][cycles[x][0]:cycles[x][1]]      
+                mean = np.mean(tempydata)
+                stddev = np.std(tempydata)
+                rawsigmean = np.mean(temprawsig)
+                rawsigdev = np.std(temprawsig)
+                n = len(tempydata)
                 stderr = stddev/np.sqrt(n)
                 stderrper = stderr/mean*100
                 print(string.ascii_uppercase[x] + '.\nmean: ' + str(mean) 
                     + '\nstd. dev.: ' + str(stddev) + '\nn: ' + str(n) 
                     + '\nstd. err.: ' + str(stderr) + '\nstd. err. %: ' + str(stderrper)
                     + '\nmean(cps): ' + str(rawsigmean) + '\n')
-                fi.write(string.ascii_uppercase[x] + ', ' + str(mean) 
+                fi.write(string.ascii_uppercase[x] + ', '+ str(dilution[x]) 
+                    + ', ' + str(mean) 
                     + ', ' + str(stddev) + ', ' + str(n) 
                     + ', ' + str(stderr) + ', ' + str(stderrper) 
                     + ', ' + str(rawsigmean) + '\n')
 ###NOTE: part below for the change in samples & decrease in error
-              #  for n in ydata[y][cycles[x][0]:cycles[x][1]]:
-              #      fi.write("{0}\n".format(n))
+           #     for n in ydata[cycles[x][0]:cycles[x][1]]:
+           #         fi.write("{0}\n".format(n))
 
                 y_calibdata.append(mean)
                 rawsig_calibdata.append(rawsigmean)
                 rawsig_stddev.append(rawsigdev)
                 y_errcalibdata.append(stderr)
-                stddevs.append(stddev)    
-   
-    
+                stddevs.append(stddev)
+
     if app.params[8].get() == 1:
 
         #Need to get a title, use polyfit for getting m, m_sigma, c and c_sigma
         #and use linregress for the r_value. Need also to get dilution/predicted
         #concentration from file        
 
-        dilution = []
-        for x in range(len(cycles)):
-            dilution.append(float(times[x][2]))
+        
         
        # filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
        # with open(filename, 'w') as fi:
@@ -955,56 +1248,67 @@ def use_readme(date, absolute_time, xdata, ydata, ax, chosenchannels, rawsignal)
         title = date + "_probability_densities" + "_" + chosenchannels[0].replace("/", "") 
         title.replace(" ","_")
         fig3.canvas.set_window_title(title)
-     #   axs[rows//2, 0].set_ylabel("Probability density")
-     #   axs[rows-1, 0].set_xlabel("Measured concentration (ppb)")
-        ax.set_xlabel("Measured concentration (ppb)")
+        
+        if app.params[5].get() == "Normalised signal intensity":
+            ax.set_xlabel("Normalised signal intensity (ncps)")
+        elif app.params[5].get() == "Concentration":
+            ax.set_xlabel("Measured concentration (ppbv)")
+
         ax.set_ylabel("Probability density")
         axs = trim_axs(axs, len(dilution))
         
         cos = range(len(dilution))
         for ax, co in zip(axs, cos):
-            _, bins, _ = ax.hist(ydata[0][cycles[co][0]:cycles[co][1]], bins=30, density=True)#,label=cycle_labels[co][0])
+            _, bins, _ = ax.hist(ydata[cycles[co][0]:cycles[co][1]], bins=30, density=True)#,label=cycle_labels[co])
             y = ((1 / (np.sqrt(2 * np.pi) * stddevs[co])) *  np.exp(-0.5 * (1 / stddevs[co] * (bins - y_calibdata[co]))**2))
-            ax.plot(bins, y, '--')
+            
             if co == 0:
                 ax.axvline(y_calibdata[co], color='k', label=r"$\bar{x}$")
                 ax.axvline(y_calibdata[co] + stddevs[co], color='r', label=r"$\sigma$")
-                leg2 = ax.legend(loc=2).get_frame()
-                leg2.set_alpha(0)
-                leg2.set_edgecolor("None")
+                ax.plot(bins, y, '--', label=r"$f(x)$")
+                ax.legend(fancybox=False, framealpha=1, edgecolor="black", loc='lower center', bbox_to_anchor=(0.5, 1), ncol=3)
+                
             else:
+                ax.plot(bins, y, '--')
                 ax.axvline(y_calibdata[co], color='k')
                 ax.axvline(y_calibdata[co] + stddevs[co], color='r')
             ax.axvline(y_calibdata[co] - stddevs[co], color='r')
-            ax.annotate(s="{})".format(cycle_labels[co][0]), xy=(0.9, 0.8),xycoords="axes fraction")
+            ax.annotate(s="{}".format(cycle_labels[co]), xy=(0.9, 0.8),xycoords="axes fraction")
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.0e'))
             ax.locator_params(nbins=5, axis='x')
             ax.tick_params(axis='y', which='both', labelleft=False)
-             
+        
+        
         for n in range(len(dilution)):
-            ax2.annotate(cycle_labels[n][0],(dilution[n],y_calibdata[n]+0.5)).draggable()
+            ax2.annotate(cycle_labels[n],(dilution[n],y_calibdata[n]+0.5)).draggable()
 
+        slope, intercept, r_value, _, std_err = linregress(dilution, y_calibdata)
         f, V  = np.polyfit(dilution, y_calibdata, 1, cov=True, w=stddevs)
         title = date + ' characterisation'
+
+#The caption for the calibration need to be "s=XX\pmYY \n i=XX\pmYY \n r^2=XX"
         ax2.plot(dilution, np.polyval(np.poly1d(f), dilution), 
-            'r-', lw=1.5, label='Linear fit')
+            'r-', lw=1.5, label=(r"$s=$"+str(f[0])[:4]+"$\pm$"+str(np.sqrt(V[0][0]))[:3]+
+            "\n"+"$i=23$"#+str(f[1])[:2]
+            +"$\pm$"+str(np.sqrt(V[1][1]))[:1]+"\n"+"r$^2=$"+str(r_value)[:4]))
        
-        slope, intercept, r_value, _, std_err = linregress(dilution, y_calibdata)
+        ax2.axhspan(ymin=-50, ymax=y_calibdata[0]+3*stddevs[0], color="grey", alpha=0.5, label="LOD")
         
         #Linear regression does not take into account the standard deviation of each point.
        # ax2.plot(dilution, np.polyval([slope, intercept], dilution),
        #     'b--', lw=1.5, label='scipy linear regression')
 
         ax2.tick_params(which='both',direction='in',top=True, right=True)
-        ax2.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
-        ax2.set(xlabel=r'Dilution factor ($\frac{\phi_{VOC}}{\phi{tot}}$)', 
-            ylabel = 'Measured\nconcentration (ppb)')#, title=title)        
-        leg = ax2.legend().get_frame()
-        leg.set_alpha(0)
-        leg.set_edgecolor('None')
+      #  ax2.grid(which='major', axis='both',color='skyblue',ls=':',lw=1)
+        if app.params[5].get() == "Normalised signal intensity":
+            ax2.set_ylabel("Normalised signal intensity (ncps)")
+        elif app.params[5].get() == "Concentration":
+            ax2.set_ylabel("Measured concentration (ppbv)")
+        #ax2.set(xlabel=r'Dilution factor ($\frac{\phi_{VOC}}{\phi{tot}}$)')
+        ax2.set(xlabel="Concentration (ppbv)")
+        ax2.legend(fancybox=False, framealpha=1, edgecolor="black")
         fig3.tight_layout()
 
-        filename = os.path.dirname(os.path.abspath(app.paths[0].get().split()[0])) + date + ' ' + chosenchannels[0].replace("/", "") + ".txt"
         with open(filename, 'a') as fi:
             fi.write('# ' + chosenchannels[0] + '\n')
             fi.write('# y = mx + c\n')
